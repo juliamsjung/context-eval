@@ -1,0 +1,11 @@
+{
+    "project_name": "Toy LLM System (OpenAI SDK)",
+    "model": "gpt-5",
+    "system_prompt": "You are a precise, concise assistant.",
+    "temperature": 0.0,
+    "max_output_tokens": 256,
+    "task": {
+      "input": "Explain what an LLM agent is in one sentence.",
+      "success_contains": ["agent", "llm"]
+    }
+  }
