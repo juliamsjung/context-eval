@@ -21,6 +21,7 @@ We evaluate agents **as ML experimenters**. An agent plans, writes code, calls t
 - **Stop criteria:** produce a **valid structured output** (e.g., metrics JSON) or meet a **task-native target** (e.g., ≥10% over a starter baseline) within token/time/iteration budgets.
 
 ## Stucture (Placeholder)
+As most of our work so far has been literature review and problem scoping, the code is currently just a placeholder. By the end of Q1, we aim to have a toy LLM system using the OpenAI SDK with a GPT-5 key, with an our layer of a context-only controller that updates/evaluates prompts, tool policy, and memory based on tests and metrics. Each run will generate a JSON of trace logs capturing the prompt/tool/memory usage, token counts, and timings. We will then evaluate this system on a lightweight ML-experimentation testbed (planning, coding, running checks, reading tracebacks) with deterministic splits and a pinned environment to measure context policies reliably.
 
 - `code.py` contains library code — functions that will power a toy LLM system (soon via the OpenAI SDK with a GPT-5 key). For now, it exposes a minimal `run()` so the repo is executable.
 - `config.json` contains parameters for the functions in `code.py` (e.g., model id, simple task input, basic budgets).
