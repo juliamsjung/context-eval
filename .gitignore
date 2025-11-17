@@ -13,9 +13,10 @@ ENV/
 traces/
 *.jsonl
 
-# Environment variables
+# Environment variables (keep secrets local)
 .env
 .env.local
+.env.*
 
 # IDE
 .vscode/

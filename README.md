@@ -35,3 +35,12 @@ Post checkpoint steps: Develop a **toy LLM system** using OpenAI SDK + GPT-5 key
 
 ```bash
 python3 script.py --config config.json
+```
+
+### Environment Variables
+- Copy the provided `.env` file (or create one) in the project root and set your real key:
+  ```
+  OPENAI_API_KEY="sk-replace-with-your-key"
+  ```
+- The library loads `.env` automatically on import, so you do not need to `export` the variable manually.
+- Keep any personalized `.env` out of version control if you add other secrets.

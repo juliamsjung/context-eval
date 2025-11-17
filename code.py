@@ -9,7 +9,7 @@ Phase 1 features:
 
 Requires:
   pip install openai (optional, for real API calls)
-  export OPENAI_API_KEY=... (optional)
+  Add OPENAI_API_KEY="..." to .env (optional)
 """
 
 from dataclasses import dataclass, asdict
@@ -26,6 +26,52 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+
+DEFAULT_ENV_PATH = Path(__file__).resolve().parent / ".env"
+
+
+def load_env_file(env_path: Optional[str] = None) -> Dict[str, str]:
+    """Load environment variables from a .env file if present."""
+    path = Path(env_path) if env_path else DEFAULT_ENV_PATH
+    if not path.exists():
+        return {}
+    
+    loaded_vars: Dict[str, str] = {}
+    with path.open("r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            
+            if "#" in line:
+                line = line.split("#", 1)[0].strip()
+            
+            if "=" not in line:
+                continue
+            
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            
+            if not key:
+                continue
+            
+            if value and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            
+            loaded_vars[key] = value
+    
+    return loaded_vars
+
+
+# Load environment variables at import time so OPENAI_API_KEY is available
+_ENV_VARS = load_env_file()
+
+
+def get_env_var(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Fetch a value from the loaded .env data."""
+    return _ENV_VARS.get(key, default)
 
 
 @dataclass
@@ -319,10 +365,18 @@ def _stub_run(config: Dict[str, Any], context: ContextState, trace_logger: Trace
     return output_text, usage, stop_reason
 
 
-def _real_run(config: Dict[str, Any], context: ContextState, trace_logger: TraceLogger, iteration_history: Optional[List[Dict[str, Any]]] = None) -> tuple[str, Dict[str, Any], str]:
+def _real_run(
+    config: Dict[str, Any],
+    context: ContextState,
+    trace_logger: TraceLogger,
+    api_key: str,
+    iteration_history: Optional[List[Dict[str, Any]]] = None,
+) -> tuple[str, Dict[str, Any], str]:
     """Real API run using OpenAI SDK."""
     if not OPENAI_AVAILABLE:
         raise RuntimeError("OpenAI SDK not available. Install with: pip install openai")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not found in .env")
     
     model = config.get("model", "gpt-4o-mini")
     temperature = float(config.get("temperature", 0.0))
@@ -342,7 +396,7 @@ def _real_run(config: Dict[str, Any], context: ContextState, trace_logger: Trace
     )
     
     # Make API call
-    client = OpenAI()
+    client = OpenAI(api_key=api_key)
     t0 = time.time()
     try:
         resp = client.chat.completions.create(
@@ -411,8 +465,9 @@ def run(config: Dict[str, Any]) -> Result:
         metadata={"config": {k: v for k, v in config.items() if k != "trace_path"}},
     )
     
-    # Check if we should use stub mode
-    use_stub = not os.getenv("OPENAI_API_KEY") or config.get("use_stub", False)
+    # Determine provider based on .env configuration
+    openai_api_key = get_env_var("OPENAI_API_KEY")
+    use_stub = not openai_api_key or config.get("use_stub", False)
     provider = "stub" if use_stub else "openai"
     model = "stub" if use_stub else config.get("model", "gpt-4o-mini")
     
@@ -453,7 +508,13 @@ def run(config: Dict[str, Any]) -> Result:
             if use_stub:
                 output_text, usage, api_stop_reason = _stub_run(config, context, trace_logger, iteration_history)
             else:
-                output_text, usage, api_stop_reason = _real_run(config, context, trace_logger, iteration_history)
+                output_text, usage, api_stop_reason = _real_run(
+                    config,
+                    context,
+                    trace_logger,
+                    openai_api_key,
+                    iteration_history,
+                )
             
             # Accumulate usage
             total_usage["input_tokens"] += usage.get("input_tokens", 0)
