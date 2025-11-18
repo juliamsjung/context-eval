@@ -31,34 +31,38 @@ Post checkpoint steps: Develop a **toy LLM system** using OpenAI SDK + GPT-5 key
 
 ---
 
-## Setup (Placeholder)
+## Setup
 
 ```bash
 python3 script.py --config config.json
 ```
 
 ### Environment Variables
-- Copy the provided `.env` file (or create one) in the project root and set your real key:
-  ```
-  OPENAI_API_KEY="sk-replace-with-your-key"
-  ```
-- The library loads `.env` automatically on import, so you do not need to `export` the variable manually.
-- Keep any personalized `.env` out of version control if you add other secrets.
+- Copy the provided `.env` template (or create one) in the repo root. The code loads it automatically on import, so no manual `export` is needed. Keep this file untracked.
+
+#### 1. Install dependencies
+```bash
+pip install openai arize-phoenix-otel
+```
+
+#### 2. Correct configuration
+
+`.env` file required keys:
+```
+OPENAI_API_KEY=<OpenAI key>
+PHOENIX_API_KEY=<system key from Phoenix dashboard (JWT-like)>
+PHOENIX_PROJECT_NAME=toy-llm          # any descriptive label for grouping traces
+PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/<space-id>/v1/traces
+# Optional (legacy/custom collectors):
+# PHOENIX_CLIENT_HEADERS="api_key%3Dphx-..."   # URL-encoded header for pre-Jun-24-2025 spaces
+# PHOENIX_GRPC_PORT="4317"                     # override only if your collector runs elsewhere
+```
+- **API key**: Use a **System Key**, not a user key. Retrieve it from *Dashboard → Settings → API Keys* in Phoenix.  
+- **Endpoint**: Copy the *Hostname* field and append `/v1/traces` for direct trace export (Cloud ingest is HTTP-only as of May 2025).  
+- **Project name**: Any string; we default to `toy-llm` and reference it when filtering traces in Phoenix.
 
 ### Observability (Arize Phoenix)
-- Install Phoenix OpenTelemetry helpers alongside OpenAI:
-  ```bash
-  pip install arize-phoenix-otel
-  ```
-- Add Phoenix credentials to your `.env` (all optional, but `PHOENIX_API_KEY` + either `PHOENIX_COLLECTOR_ENDPOINT` or `PHOENIX_PROJECT_NAME` are typical):
-  ```
-  PHOENIX_API_KEY=""
-  PHOENIX_PROJECT_NAME="toy-llm"
-  PHOENIX_COLLECTOR_ENDPOINT="https://app.phoenix.arize.com/s/<space-id>"
-  # Optional: PHOENIX_CLIENT_HEADERS, PHOENIX_GRPC_PORT
-  ```
-- Enable telemetry in `config.json` by setting `telemetry.phoenix.enabled` to `true` (defaults to auto-enable when the required env vars exist).
-- During a run the system now publishes both local JSONL traces (`traces/run.jsonl`) and Phoenix spans (LLM API calls, iteration loop metadata, evaluation feedback) for centralized monitoring.
+Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (already true in the repo). During a run the system emits both local JSONL traces (`traces/run.jsonl`) and Phoenix spans (LLM API calls, iteration metadata, evaluations).
 
 #### Phoenix setup & verification
 1. **Create credentials**  
@@ -86,3 +90,21 @@ python3 script.py --config config.json
 5. **Troubleshooting tips**  
    - No spans appearing? Double-check the API key, endpoint URL, and that `arize-phoenix-otel` is installed in the same virtualenv.  
    - To test connectivity, temporarily set `PHOENIX_COLLECTOR_ENDPOINT="http://localhost:6006"` and run `phoenix serve` or the Docker image from the docs, then rerun the script.
+
+#### 3. Key issues we hit (and fixes)
+
+| Issue | Symptom | Solution / Notes |
+| --- | --- | --- |
+| Dashboard hostname used without `/v1/traces` | 405 / 500 from collector | Add `/v1/traces` so the exporter targets the OTLP HTTP ingest endpoint directly |
+| Invalid or user-level API key | 401 Unauthorized | Regenerate/copy a **System Key** from *Settings → API Keys* |
+| Protocol warning (“defaulting to HTTP”) | Warning during run but spans still show up | Safe to ignore as long as traces arrive in Phoenix (Cloud is HTTP-only as of May 2025) |
+| Missing client header in legacy spaces | Persistent 500 errors | Set `PHOENIX_CLIENT_HEADERS="api_key%3D<system-key>"` for spaces created before Jun 24, 2025 |
+| No timestamps on prior shell history | Hard to audit older commands | Add `HISTTIMEFORMAT="%F %T "` to your shell rc to log timestamps going forward |
+| Docs don’t explicitly mention `/v1/traces` | Confusion when endpoints rejected | Empirically confirmed the OTLP subpath is required for Cloud ingest |
+
+#### 4. Verification steps
+1. Run `python3 script.py --config config.json`.  
+2. In Phoenix, open your space → find the project card (e.g., “Toy LLM System”) → confirm trace counts/latency update.  
+3. Drill into a trace to see spans `toy_llm.run`, `toy_llm.iteration`, and `toy_llm.openai_call`.  
+4. Ignore protocol warnings if traces arrive correctly; they’re cosmetic once ingestion succeeds.  
+5. Locally inspect `traces/run.jsonl` for a backup log of the run.
