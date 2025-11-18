@@ -57,9 +57,11 @@ PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/<space-id>/v1/traces
 # PHOENIX_CLIENT_HEADERS=""   # URL-encoded header for pre-Jun-24-2025 spaces
 # PHOENIX_GRPC_PORT="4317"                     # override only if your collector runs elsewhere
 ```
-- **API key**: Use a **System Key**, not a user key. Retrieve it from *Dashboard → Settings → API Keys* in Phoenix.  
+- Go to https://app.phoenix.arize.com/management/spaces
+- You'll see spaces. I created a new space called `dsc180a`. Launch that, and then go to settings.
+- **Phoenix API key**: Use a **System Key**, not a user key. Retrieve it from *Dashboard of Space → Settings → API Keys* in Phoenix.  
 - **Endpoint**: Copy the *Hostname* field and append `/v1/traces` for direct trace export (Cloud ingest is HTTP-only as of May 2025).  
-- **Project name**: Any string; we default to `toy-llm` and reference it when filtering traces in Phoenix.
+- **Project name**: Any string; we default to `toy-llm` and reference it when filtering traces in Phoenix. This can be changed.
 
 ### Observability (Arize Phoenix)
 Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (already true in the repo). During a run the system emits both local JSONL traces (`traces/run.jsonl`) and Phoenix spans (LLM API calls, iteration metadata, evaluations).
@@ -70,7 +72,7 @@ Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (already 
    - Create or select a *Space*, then open **Settings → API Keys**.  
    - Copy the *API Key* and *Hostname* (collector endpoint). If your space was created before **Jun 24, 2025**, also note the legacy API-header requirement described in the [Phoenix docs](https://arize.com/docs/phoenix/integrations/python/beeai/beeai-tracing-python).
 2. **Populate `.env`**  
-   - Add the following entries (quotes optional, but recommended for secrets):
+   - Add the following entries:
      ```
      OPENAI_API_KEY=""
      PHOENIX_API_KEY=""
