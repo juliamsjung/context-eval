@@ -44,3 +44,45 @@ python3 script.py --config config.json
   ```
 - The library loads `.env` automatically on import, so you do not need to `export` the variable manually.
 - Keep any personalized `.env` out of version control if you add other secrets.
+
+### Observability (Arize Phoenix)
+- Install Phoenix OpenTelemetry helpers alongside OpenAI:
+  ```bash
+  pip install arize-phoenix-otel
+  ```
+- Add Phoenix credentials to your `.env` (all optional, but `PHOENIX_API_KEY` + either `PHOENIX_COLLECTOR_ENDPOINT` or `PHOENIX_PROJECT_NAME` are typical):
+  ```
+  PHOENIX_API_KEY=""
+  PHOENIX_PROJECT_NAME="toy-llm"
+  PHOENIX_COLLECTOR_ENDPOINT="https://app.phoenix.arize.com/s/<space-id>"
+  # Optional: PHOENIX_CLIENT_HEADERS, PHOENIX_GRPC_PORT
+  ```
+- Enable telemetry in `config.json` by setting `telemetry.phoenix.enabled` to `true` (defaults to auto-enable when the required env vars exist).
+- During a run the system now publishes both local JSONL traces (`traces/run.jsonl`) and Phoenix spans (LLM API calls, iteration loop metadata, evaluation feedback) for centralized monitoring.
+
+#### Phoenix setup & verification
+1. **Create credentials**  
+   - Sign in at [app.phoenix.arize.com](https://app.phoenix.arize.com/login).  
+   - Create or select a *Space*, then open **Settings → API Keys**.  
+   - Copy the *API Key* and *Hostname* (collector endpoint). If your space was created before **Jun 24, 2025**, also note the legacy API-header requirement described in the [Phoenix docs](https://arize.com/docs/phoenix/integrations/python/beeai/beeai-tracing-python).
+2. **Populate `.env`**  
+   - Add the following entries (quotes optional, but recommended for secrets):
+     ```
+     OPENAI_API_KEY="sk-..."
+     PHOENIX_API_KEY="phx-..."
+     PHOENIX_PROJECT_NAME="toy-llm"        # or your space/project label
+     PHOENIX_COLLECTOR_ENDPOINT="https://<hostname-from-settings>"
+     # Optional:
+     # PHOENIX_CLIENT_HEADERS="api_key%3Dphx-..."   # only needed for legacy spaces
+     # PHOENIX_GRPC_PORT="4317"                     # change if using a custom collector port
+     ```
+3. **Enable telemetry**  
+   - Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (or rely on auto-enable once the env vars exist).
+4. **Run & verify**  
+   - Execute `python3 script.py --config config.json`.  
+   - On success/failure you will still get the JSON result, plus Phoenix spans will stream to your space.  
+   - In the Phoenix UI, open the space’s *Traces* tab and filter by project name (default `toy-llm`) to confirm you see spans like `toy_llm.run`, `toy_llm.iteration`, and `toy_llm.openai_call`.  
+   - Locally, you can also inspect `traces/run.jsonl` for the legacy JSON trace log.
+5. **Troubleshooting tips**  
+   - No spans appearing? Double-check the API key, endpoint URL, and that `arize-phoenix-otel` is installed in the same virtualenv.  
+   - To test connectivity, temporarily set `PHOENIX_COLLECTOR_ENDPOINT="http://localhost:6006"` and run `phoenix serve` or the Docker image from the docs, then rerun the script.

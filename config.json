@@ -3,7 +3,7 @@
   "model": "gpt-4o-mini",
   "temperature": 0.0,
   "max_output_tokens": 256,
-  "max_iterations": 10,
+  "max_iterations": 5,
   "max_time_sec": null,
   "trace_path": "traces/run.jsonl",
   "use_stub": false,
@@ -23,6 +23,13 @@
     "success_threshold": 100.0,
     "output_schema": {
       "required_keys": []
+    }
+  },
+  "telemetry": {
+    "phoenix": {
+      "enabled": true,
+      "batch": true,
+      "auto_instrument": false
     }
   }
 }

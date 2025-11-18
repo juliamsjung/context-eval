@@ -15,10 +15,12 @@ Requires:
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional
 from pathlib import Path
+from contextlib import contextmanager, nullcontext
 import json
 import os
 import time
 import copy
+import logging
 from datetime import datetime
 
 try:
@@ -27,8 +29,16 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+try:
+    from phoenix.otel import register as phoenix_register
+    PHOENIX_TRACING_AVAILABLE = True
+except ImportError:
+    PHOENIX_TRACING_AVAILABLE = False
+    phoenix_register = None  # type: ignore
+
 
 DEFAULT_ENV_PATH = Path(__file__).resolve().parent / ".env"
+logger = logging.getLogger(__name__)
 
 
 def load_env_file(env_path: Optional[str] = None) -> Dict[str, str]:
@@ -72,6 +82,96 @@ _ENV_VARS = load_env_file()
 def get_env_var(key: str, default: Optional[str] = None) -> Optional[str]:
     """Fetch a value from the loaded .env data."""
     return _ENV_VARS.get(key, default)
+
+
+def _format_span_value(value: Any) -> Any:
+    if isinstance(value, (str, bool, int, float)):
+        return value
+    if value is None:
+        return "null"
+    try:
+        return json.dumps(value, default=str)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _phoenix_settings(config: Dict[str, Any]) -> Dict[str, Any]:
+    telemetry_root = config.get("telemetry", {})
+    telemetry_cfg = telemetry_root.get("phoenix", {}) if isinstance(telemetry_root, dict) else {}
+    env_endpoint = get_env_var("PHOENIX_COLLECTOR_ENDPOINT")
+    env_project = get_env_var("PHOENIX_PROJECT_NAME")
+    env_api_key = get_env_var("PHOENIX_API_KEY")
+    explicit_enabled = telemetry_cfg.get("enabled")
+    default_enabled = bool(env_endpoint or env_api_key)
+    return {
+        "enabled": default_enabled if explicit_enabled is None else bool(explicit_enabled),
+        "project_name": telemetry_cfg.get("project_name")
+        or config.get("project_name")
+        or env_project
+        or "default",
+        "collector_endpoint": telemetry_cfg.get("collector_endpoint") or env_endpoint,
+        "batch": telemetry_cfg.get("batch", True),
+        "auto_instrument": telemetry_cfg.get("auto_instrument", False),
+        "api_key": env_api_key,
+    }
+
+
+class PhoenixTracerManager:
+    """Thin wrapper around Phoenix/OpenTelemetry tracing."""
+
+    def __init__(self, settings: Dict[str, Any]):
+        self.settings = settings
+        self.enabled = settings.get("enabled", False) and PHOENIX_TRACING_AVAILABLE
+        self._provider = None
+        self._tracer = None
+        if self.enabled:
+            self._initialize_tracer()
+
+    def _initialize_tracer(self):
+        if not PHOENIX_TRACING_AVAILABLE or phoenix_register is None:
+            self.enabled = False
+            return
+        try:
+            register_kwargs = {
+                "project_name": self.settings.get("project_name", "default"),
+                "batch": self.settings.get("batch", True),
+                "auto_instrument": self.settings.get("auto_instrument", False),
+                "set_global_tracer_provider": False,
+                "verbose": False,
+            }
+            if endpoint := self.settings.get("collector_endpoint"):
+                register_kwargs["endpoint"] = endpoint
+            if api_key := self.settings.get("api_key"):
+                register_kwargs["api_key"] = api_key
+            self._provider = phoenix_register(**register_kwargs)
+            self._tracer = self._provider.get_tracer("toy_llm.runner")
+        except Exception as exc:  # pragma: no cover - diagnostic logging
+            self.enabled = False
+            self._provider = None
+            self._tracer = None
+            logger.warning("Failed to initialize Phoenix tracing: %s", exc)
+
+    @contextmanager
+    def span(self, name: str, attributes: Optional[Dict[str, Any]] = None):
+        if not self._tracer:
+            yield None
+            return
+        with self._tracer.start_as_current_span(name) as span:
+            self.set_attributes(span, attributes)
+            yield span
+
+    def set_attributes(self, span: Any, attributes: Optional[Dict[str, Any]] = None):
+        if not span or not attributes:
+            return
+        for key, value in attributes.items():
+            span.set_attribute(key, _format_span_value(value))
+
+    def shutdown(self):
+        if self._provider:
+            try:
+                self._provider.shutdown()
+            except Exception as exc:  # pragma: no cover - diagnostic logging
+                logger.warning("Failed to shutdown Phoenix tracer: %s", exc)
 
 
 @dataclass
@@ -290,7 +390,13 @@ def _evaluate_task(task_config: Dict[str, Any], guess: str, iteration_history: L
         }
 
 
-def _stub_run(config: Dict[str, Any], context: ContextState, trace_logger: TraceLogger, iteration_history: Optional[List[Dict[str, Any]]] = None) -> tuple[str, Dict[str, Any], str]:
+def _stub_run(
+    config: Dict[str, Any],
+    context: ContextState,
+    trace_logger: TraceLogger,
+    iteration_history: Optional[List[Dict[str, Any]]] = None,
+    phoenix_tracer: Optional[PhoenixTracerManager] = None,
+) -> tuple[str, Dict[str, Any], str]:
     """Deterministic stub run when API key is not available."""
     task = config.get("task", {})
     user_input = task.get("input", "Say hello in one sentence.")
@@ -307,50 +413,74 @@ def _stub_run(config: Dict[str, Any], context: ContextState, trace_logger: Trace
         messages=messages,
         metadata={"mode": "stub", "reason": "OPENAI_API_KEY not set", "iteration": context.iteration},
     )
-    
-    # Generate deterministic stub output
-    if required_keys:
-        # Create a stub JSON response with required keys
-        stub_output = {key: f"stub_{key}_value" for key in required_keys}
-        output_text = json.dumps(stub_output, indent=2)
-    else:
-        # For iterative tasks, generate a guess
-        task_type = task.get("type", "")
-        if task_type == "semantle":
-            # Generate deterministic guesses that get progressively closer
-            target_word = task.get("target_word", "example").lower()
-            iteration_num = len(iteration_history)
-            
-            # Deterministic stub guesses that approach the target
-            stub_guesses = [
-                "word", "term", "sample", "instance", "case", 
-                "illustration", "demonstration", "specimen", "model", "example"
-            ]
-            
-            # Cycle through guesses, eventually landing on target
-            if iteration_num < len(stub_guesses):
-                guess = stub_guesses[iteration_num]
-                # If we're close to target position, use target
-                if guess == target_word or iteration_num >= len(stub_guesses) - 1:
-                    output_text = target_word
-                else:
-                    output_text = guess
-            else:
-                # After cycling, return target
-                output_text = target_word
+    span_cm = (
+        phoenix_tracer.span(
+            "toy_llm.stub_call",
+            {
+                "toy_llm.provider": "stub",
+                "toy_llm.iteration": context.iteration,
+                "toy_llm.task_type": task.get("type", "simple"),
+                "toy_llm.message_count": len(messages),
+            },
+        )
+        if phoenix_tracer
+        else nullcontext()
+    )
+    with span_cm as span:
+        # Generate deterministic stub output
+        if required_keys:
+            # Create a stub JSON response with required keys
+            stub_output = {key: f"stub_{key}_value" for key in required_keys}
+            output_text = json.dumps(stub_output, indent=2)
         else:
-            # Simple text response
-            output_text = f"Stub response to: {user_input}"
-    
-    # Simulate usage
-    usage = {
-        "input_tokens": len(str(messages)) // 4,  # Rough estimate
-        "output_tokens": len(output_text) // 4,
-        "total_tokens": (len(str(messages)) + len(output_text)) // 4,
-    }
-    
-    # Determine stop reason
-    stop_reason = "stub_completion"
+            # For iterative tasks, generate a guess
+            task_type = task.get("type", "")
+            if task_type == "semantle":
+                # Generate deterministic guesses that get progressively closer
+                target_word = task.get("target_word", "example").lower()
+                iteration_num = len(iteration_history)
+                
+                # Deterministic stub guesses that approach the target
+                stub_guesses = [
+                    "word", "term", "sample", "instance", "case", 
+                    "illustration", "demonstration", "specimen", "model", "example"
+                ]
+                
+                # Cycle through guesses, eventually landing on target
+                if iteration_num < len(stub_guesses):
+                    guess = stub_guesses[iteration_num]
+                    # If we're close to target position, use target
+                    if guess == target_word or iteration_num >= len(stub_guesses) - 1:
+                        output_text = target_word
+                    else:
+                        output_text = guess
+                else:
+                    # After cycling, return target
+                    output_text = target_word
+            else:
+                # Simple text response
+                output_text = f"Stub response to: {user_input}"
+        
+        # Simulate usage
+        usage = {
+            "input_tokens": len(str(messages)) // 4,  # Rough estimate
+            "output_tokens": len(output_text) // 4,
+            "total_tokens": (len(str(messages)) + len(output_text)) // 4,
+        }
+        
+        # Determine stop reason
+        stop_reason = "stub_completion"
+        
+        if phoenix_tracer and span:
+            phoenix_tracer.set_attributes(
+                span,
+                {
+                    "toy_llm.output_length": len(output_text),
+                    "toy_llm.usage.input_tokens": usage["input_tokens"],
+                    "toy_llm.usage.output_tokens": usage["output_tokens"],
+                    "toy_llm.usage.total_tokens": usage["total_tokens"],
+                },
+            )
     
     # Log completion
     trace_logger.log_step(
@@ -371,6 +501,7 @@ def _real_run(
     trace_logger: TraceLogger,
     api_key: str,
     iteration_history: Optional[List[Dict[str, Any]]] = None,
+    phoenix_tracer: Optional[PhoenixTracerManager] = None,
 ) -> tuple[str, Dict[str, Any], str]:
     """Real API run using OpenAI SDK."""
     if not OPENAI_AVAILABLE:
@@ -396,48 +527,78 @@ def _real_run(
     )
     
     # Make API call
-    client = OpenAI(api_key=api_key)
-    t0 = time.time()
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_output_tokens,
+    span_cm = (
+        phoenix_tracer.span(
+            "toy_llm.openai_call",
+            {
+                "toy_llm.provider": "openai",
+                "toy_llm.model": model,
+                "toy_llm.iteration": context.iteration,
+                "toy_llm.temperature": temperature,
+                "toy_llm.max_output_tokens": max_output_tokens,
+                "toy_llm.message_count": len(messages),
+            },
         )
-        elapsed = time.time() - t0
-        
-        # Extract response
-        output_text = resp.choices[0].message.content or ""
-        stop_reason = resp.choices[0].finish_reason or "unknown"
-        
-        # Extract usage
-        usage = {
-            "input_tokens": resp.usage.prompt_tokens,
-            "output_tokens": resp.usage.completion_tokens,
-            "total_tokens": resp.usage.total_tokens,
-        }
-        
-        # Log completion
-        trace_logger.log_step(
-            "api_response",
-            context,
-            messages=[{"role": "assistant", "content": output_text}],
-            usage=usage,
-            stop_reason=stop_reason,
-            metadata={"elapsed_sec": round(elapsed, 4), "iteration": context.iteration},
-        )
-        
-        return output_text, usage, stop_reason
-        
-    except Exception as e:
-        # Log error
-        trace_logger.log_step(
-            "api_error",
-            context,
-            metadata={"error": str(e), "error_type": type(e).__name__, "iteration": context.iteration},
-        )
-        raise
+        if phoenix_tracer
+        else nullcontext()
+    )
+    with span_cm as span:
+        client = OpenAI(api_key=api_key)
+        t0 = time.time()
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_output_tokens,
+            )
+            elapsed = time.time() - t0
+            
+            # Extract response
+            output_text = resp.choices[0].message.content or ""
+            stop_reason = resp.choices[0].finish_reason or "unknown"
+            
+            # Extract usage
+            usage = {
+                "input_tokens": resp.usage.prompt_tokens,
+                "output_tokens": resp.usage.completion_tokens,
+                "total_tokens": resp.usage.total_tokens,
+            }
+            
+            if phoenix_tracer and span:
+                phoenix_tracer.set_attributes(
+                    span,
+                    {
+                        "toy_llm.output_length": len(output_text),
+                        "toy_llm.usage.input_tokens": usage["input_tokens"],
+                        "toy_llm.usage.output_tokens": usage["output_tokens"],
+                        "toy_llm.usage.total_tokens": usage["total_tokens"],
+                        "toy_llm.stop_reason": stop_reason,
+                    },
+                )
+            
+            # Log completion
+            trace_logger.log_step(
+                "api_response",
+                context,
+                messages=[{"role": "assistant", "content": output_text}],
+                usage=usage,
+                stop_reason=stop_reason,
+                metadata={"elapsed_sec": round(elapsed, 4), "iteration": context.iteration},
+            )
+            
+            return output_text, usage, stop_reason
+            
+        except Exception as e:
+            # Log error
+            trace_logger.log_step(
+                "api_error",
+                context,
+                metadata={"error": str(e), "error_type": type(e).__name__, "iteration": context.iteration},
+            )
+            if span:
+                span.record_exception(e)
+            raise
 
 
 def run(config: Dict[str, Any]) -> Result:
@@ -465,6 +626,9 @@ def run(config: Dict[str, Any]) -> Result:
         metadata={"config": {k: v for k, v in config.items() if k != "trace_path"}},
     )
     
+    # Initialize Phoenix tracing (no-op if disabled or unavailable)
+    phoenix_tracer = PhoenixTracerManager(_phoenix_settings(config))
+    
     # Determine provider based on .env configuration
     openai_api_key = get_env_var("OPENAI_API_KEY")
     use_stub = not openai_api_key or config.get("use_stub", False)
@@ -483,156 +647,218 @@ def run(config: Dict[str, Any]) -> Result:
     stop_reason = "max_iterations"
     final_output = ""
     start_time = time.time()
+    run_span_cm = phoenix_tracer.span(
+        "toy_llm.run",
+        {
+            "toy_llm.project_name": config.get("project_name", "toy-llm"),
+            "toy_llm.provider": provider,
+            "toy_llm.model": model,
+            "toy_llm.is_iterative": is_iterative,
+            "toy_llm.max_iterations": budgets["max_iterations"],
+        },
+    )
     
     try:
-        # Iterative execution loop
-        for iteration_num in range(budgets["max_iterations"]):
-            controller.increment_iteration()
-            context = controller.get_context()
-            
-            # Check time budget
-            if budgets["max_time_sec"]:
-                elapsed = time.time() - start_time
-                if elapsed > budgets["max_time_sec"]:
-                    stop_reason = "time_limit"
-                    break
-            
-            # Build user input (for iterative tasks, include feedback from previous iterations)
-            if is_iterative and iteration_history:
-                # For iterative tasks, prompt for next guess using previous results
-                user_input = task.get("iterative_prompt", "Based on the previous attempts, make your next guess.")
-            else:
-                user_input = task.get("input", "Say hello in one sentence.")
-            
-            # Run API call (stub or real) with iteration history
-            if use_stub:
-                output_text, usage, api_stop_reason = _stub_run(config, context, trace_logger, iteration_history)
-            else:
-                output_text, usage, api_stop_reason = _real_run(
-                    config,
-                    context,
-                    trace_logger,
-                    openai_api_key,
-                    iteration_history,
-                )
-            
-            # Accumulate usage
-            total_usage["input_tokens"] += usage.get("input_tokens", 0)
-            total_usage["output_tokens"] += usage.get("output_tokens", 0)
-            total_usage["total_tokens"] += usage.get("total_tokens", 0)
-            
-            # Update memory
-            controller.update_memory({"role": "user", "content": user_input})
-            controller.update_memory({"role": "assistant", "content": output_text})
-            
-            # Evaluate task result (for iterative tasks like Semantle)
-            if is_iterative:
-                evaluation = _evaluate_task(task, output_text, iteration_history)
-                iteration_history.append(evaluation)
+        with run_span_cm as run_span:
+            try:
+                # Iterative execution loop
+                for iteration_num in range(budgets["max_iterations"]):
+                    controller.increment_iteration()
+                    context = controller.get_context()
+                    
+                    # Check time budget
+                    if budgets["max_time_sec"]:
+                        elapsed = time.time() - start_time
+                        if elapsed > budgets["max_time_sec"]:
+                            stop_reason = "time_limit"
+                            break
+                    
+                    # Build user input (for iterative tasks, include feedback from previous iterations)
+                    if is_iterative and iteration_history:
+                        user_input = task.get("iterative_prompt", "Based on the previous attempts, make your next guess.")
+                    else:
+                        user_input = task.get("input", "Say hello in one sentence.")
+                    
+                    iteration_span_cm = phoenix_tracer.span(
+                        "toy_llm.iteration",
+                        {
+                            "toy_llm.iteration": iteration_num + 1,
+                            "toy_llm.provider": provider,
+                            "toy_llm.model": model,
+                        },
+                    )
+                    with iteration_span_cm as iteration_span:
+                        # Run API call (stub or real) with iteration history
+                        if use_stub:
+                            output_text, usage, api_stop_reason = _stub_run(
+                                config,
+                                context,
+                                trace_logger,
+                                iteration_history,
+                                phoenix_tracer,
+                            )
+                        else:
+                            output_text, usage, api_stop_reason = _real_run(
+                                config,
+                                context,
+                                trace_logger,
+                                openai_api_key,
+                                iteration_history,
+                                phoenix_tracer,
+                            )
+                        
+                        # Accumulate usage
+                        total_usage["input_tokens"] += usage.get("input_tokens", 0)
+                        total_usage["output_tokens"] += usage.get("output_tokens", 0)
+                        total_usage["total_tokens"] += usage.get("total_tokens", 0)
+                        
+                        if iteration_span:
+                            phoenix_tracer.set_attributes(
+                                iteration_span,
+                                {
+                                    "toy_llm.iteration.api_stop_reason": api_stop_reason,
+                                    "toy_llm.iteration.output_length": len(output_text),
+                                    "toy_llm.iteration.usage.total_tokens": usage.get("total_tokens", 0),
+                                },
+                            )
+                        
+                        # Update memory
+                        controller.update_memory({"role": "user", "content": user_input})
+                        controller.update_memory({"role": "assistant", "content": output_text})
+                        
+                        # Evaluate task result (for iterative tasks like Semantle)
+                        if is_iterative:
+                            evaluation = _evaluate_task(task, output_text, iteration_history)
+                            iteration_history.append(evaluation)
+                            
+                            # Log evaluation result
+                            trace_logger.log_step(
+                                "task_evaluation",
+                                context,
+                                metadata={
+                                    "iteration": iteration_num + 1,
+                                    "evaluation": evaluation,
+                                },
+                            )
+                            
+                            if iteration_span:
+                                phoenix_tracer.set_attributes(
+                                    iteration_span,
+                                    {
+                                        "toy_llm.iteration.similarity": evaluation.get("similarity"),
+                                        "toy_llm.iteration.correct": evaluation.get("correct", False),
+                                    },
+                                )
+                            
+                            # Check success condition
+                            if evaluation.get("correct", False):
+                                success = True
+                                stop_reason = "success"
+                                final_output = output_text
+                                break
+                            elif evaluation.get("similarity", 0) >= task.get("success_threshold", 100.0):
+                                success = True
+                                stop_reason = "threshold_reached"
+                                final_output = output_text
+                                break
+                            
+                            # Prepare feedback for next iteration
+                            feedback_msg = f"Your guess '{evaluation.get('guess', '')}' scored {evaluation.get('similarity', 0):.2f}. {evaluation.get('feedback', '')}"
+                            controller.update_memory({"role": "user", "content": feedback_msg})
+                            
+                            final_output = output_text
+                        else:
+                            # Non-iterative task: check success (valid JSON with required keys)
+                            output_schema = task.get("output_schema", {})
+                            required_keys = output_schema.get("required_keys", [])
+                            
+                            if required_keys:
+                                success, error_msg = _check_json_success(output_text, required_keys)
+                                if not success:
+                                    trace_logger.log_step(
+                                        "validation_failure",
+                                        context,
+                                        metadata={"error": error_msg, "output": output_text[:200]},
+                                    )
+                                    stop_reason = "validation_failed"
+                                else:
+                                    success = True
+                                    stop_reason = "validation_passed"
+                            else:
+                                success_contains = task.get("success_contains", [])
+                                if success_contains:
+                                    lower = output_text.lower()
+                                    success = all(s.lower() in lower for s in success_contains)
+                                    stop_reason = "contains_check"
+                                else:
+                                    success = True  # Default to success if no checks specified
+                                    stop_reason = "no_checks"
+                            
+                            final_output = output_text
+                            break  # Non-iterative tasks run once
+                # Build metrics
+                metrics = {
+                    "provider": provider,
+                    "model": model,
+                    "temperature": float(config.get("temperature", 0.0)),
+                    "max_output_tokens": budgets["max_tokens"],
+                    "input_tokens": total_usage["input_tokens"],
+                    "output_tokens": total_usage["output_tokens"],
+                    "total_tokens": total_usage["total_tokens"],
+                    "stop_reason": stop_reason,
+                    "iterations_completed": context.iteration,
+                    "success": success,
+                    "elapsed_sec": round(time.time() - start_time, 4),
+                }
                 
-                # Log evaluation result
+                # Add iteration history for iterative tasks
+                if is_iterative:
+                    metrics["iteration_history"] = iteration_history
+                
+                if run_span:
+                    phoenix_tracer.set_attributes(
+                        run_span,
+                        {
+                            "toy_llm.success": success,
+                            "toy_llm.stop_reason": stop_reason,
+                            "toy_llm.iterations_completed": context.iteration,
+                            "toy_llm.elapsed_sec": metrics["elapsed_sec"],
+                        },
+                    )
+                
+                # Log final result
                 trace_logger.log_step(
-                    "task_evaluation",
+                    "final_result",
                     context,
+                    usage=total_usage,
+                    budgets=budgets,
+                    stop_reason=stop_reason,
                     metadata={
-                        "iteration": iteration_num + 1,
-                        "evaluation": evaluation,
+                        "success": success,
+                        "metrics": metrics,
+                        "iteration_history": iteration_history if is_iterative else None,
                     },
                 )
                 
-                # Check success condition
-                if evaluation.get("correct", False):
-                    success = True
-                    stop_reason = "success"
-                    final_output = output_text
-                    break
-                elif evaluation.get("similarity", 0) >= task.get("success_threshold", 100.0):
-                    success = True
-                    stop_reason = "threshold_reached"
-                    final_output = output_text
-                    break
+                # Flush trace
+                trace_logger.flush()
                 
-                # Prepare feedback for next iteration
-                feedback_msg = f"Your guess '{evaluation.get('guess', '')}' scored {evaluation.get('similarity', 0):.2f}. {evaluation.get('feedback', '')}"
-                controller.update_memory({"role": "user", "content": feedback_msg})
-                
-                final_output = output_text
-            else:
-                # Non-iterative task: check success (valid JSON with required keys)
-                output_schema = task.get("output_schema", {})
-                required_keys = output_schema.get("required_keys", [])
-                
-                if required_keys:
-                    success, error_msg = _check_json_success(output_text, required_keys)
-                    if not success:
-                        trace_logger.log_step(
-                            "validation_failure",
-                            context,
-                            metadata={"error": error_msg, "output": output_text[:200]},
-                        )
-                        stop_reason = "validation_failed"
-                    else:
-                        success = True
-                        stop_reason = "validation_passed"
-                else:
-                    # Fallback: check if output contains expected strings
-                    success_contains = task.get("success_contains", [])
-                    if success_contains:
-                        lower = output_text.lower()
-                        success = all(s.lower() in lower for s in success_contains)
-                        stop_reason = "contains_check"
-                    else:
-                        success = True  # Default to success if no checks specified
-                        stop_reason = "no_checks"
-                
-                final_output = output_text
-                break  # Non-iterative tasks run once
-        
-        # Build metrics
-        metrics = {
-            "provider": provider,
-            "model": model,
-            "temperature": float(config.get("temperature", 0.0)),
-            "max_output_tokens": budgets["max_tokens"],
-            "input_tokens": total_usage["input_tokens"],
-            "output_tokens": total_usage["output_tokens"],
-            "total_tokens": total_usage["total_tokens"],
-            "stop_reason": stop_reason,
-            "iterations_completed": context.iteration,
-            "success": success,
-            "elapsed_sec": round(time.time() - start_time, 4),
-        }
-        
-        # Add iteration history for iterative tasks
-        if is_iterative:
-            metrics["iteration_history"] = iteration_history
-        
-        # Log final result
-        trace_logger.log_step(
-            "final_result",
-            context,
-            usage=total_usage,
-            budgets=budgets,
-            stop_reason=stop_reason,
-            metadata={"success": success, "metrics": metrics, "iteration_history": iteration_history if is_iterative else None},
-        )
-        
-        # Flush trace
-        trace_logger.flush()
-        
-        return Result(
-            success=success,
-            output=final_output,
-            metrics=metrics,
-            trace_path=trace_path,
-        )
-        
-    except Exception as e:
-        # Log error
-        trace_logger.log_step(
-            "error",
-            context,
-            metadata={"error": str(e), "error_type": type(e).__name__, "iteration": context.iteration},
-        )
-        trace_logger.flush()
-        raise
+                return Result(
+                    success=success,
+                    output=final_output,
+                    metrics=metrics,
+                    trace_path=trace_path,
+                )
+            except Exception as e:
+                # Log error
+                trace_logger.log_step(
+                    "error",
+                    context,
+                    metadata={"error": str(e), "error_type": type(e).__name__, "iteration": context.iteration},
+                )
+                if run_span:
+                    run_span.record_exception(e)
+                trace_logger.flush()
+                raise
+    finally:
+        phoenix_tracer.shutdown()
