@@ -19,6 +19,7 @@ DATA_PATH = WORKSPACE / "data.npy"
 LABELS_PATH = WORKSPACE / "labels.npy"
 CONFIG_PATH = WORKSPACE / "config.json"
 RESULTS_PATH = WORKSPACE / "results.json"
+ALL_RESULTS_PATH = WORKSPACE / "all_results.json"
 
 
 def _load_or_create_dataset(random_state: int) -> tuple[np.ndarray, np.ndarray]:
@@ -64,15 +65,26 @@ def main() -> None:
     preds = model.predict(X_test)
     accuracy = accuracy_score(y_test, preds)
 
-    results = {
+    if ALL_RESULTS_PATH.exists():
+        with ALL_RESULTS_PATH.open("r") as f:
+            all_results = json.load(f)
+    else:
+        all_results = []
+
+    new_result = {
         "accuracy": float(accuracy),
         "C": C,
         "max_iter": max_iter,
         "test_size": test_size,
         "random_seed": seed,
     }
-    RESULTS_PATH.write_text(json.dumps(results, indent=2))
-    print(json.dumps(results))
+    all_results.append(new_result)
+
+    with ALL_RESULTS_PATH.open("w") as f:
+        json.dump(all_results, f, indent=2)
+    
+    RESULTS_PATH.write_text(json.dumps(new_result, indent=2))
+    print(json.dumps(new_result))
 
 
 if __name__ == "__main__":

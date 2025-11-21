@@ -4,6 +4,7 @@ import json
 import logging
 from contextlib import nullcontext
 from typing import Any, Dict, List, Optional
+from pathlib import Path
 
 try:
     from openai import OpenAI
@@ -14,6 +15,9 @@ except ImportError:  # pragma: no cover
 
 from code import get_env_var  # Reuse existing .env handling
 from toy_bench.toy_tabular.toy_env import ToyTabularEnv
+
+TOY_TABULAR = Path(__file__).resolve().parent
+ALL_RESULTS_PATH = TOY_TABULAR / "workspace" / "all_results.json"
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +113,9 @@ def run_toy_tabular(
     baseline_results = env.run_train()
     history.append({"config": config.copy(), "accuracy": baseline_results["accuracy"]})
     last_results = baseline_results
+
+    with open(ALL_RESULTS_PATH, 'w') as f:
+        json.dump([], f, indent=2)
 
     for step in range(1, num_steps + 1):
         print(f"\n===> Step {step}/{num_steps}")
