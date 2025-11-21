@@ -47,3 +47,15 @@ toy_bench/toy_tabular/workspace/data.npy
 toy_bench/toy_tabular/workspace/labels.npy
 toy_bench/toy_tabular/workspace/results.json
 
+# Kaggle NOMAD data (downloaded locally)
+kaggle-data/nomad/raw/
+kaggle-data/nomad/processed/
+
+# NOMAD bench artifacts
+benchmarks/nomad/workspace/run_config.json
+benchmarks/nomad/workspace/features.npy
+benchmarks/nomad/workspace/targets.npy
+benchmarks/nomad/workspace/dataset_context.json
+benchmarks/nomad/workspace/prepared_meta.json
+benchmarks/nomad/workspace/results.json
+

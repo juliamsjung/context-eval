@@ -42,7 +42,7 @@ python3 script.py --config config.json
 
 #### 1. Install dependencies
 ```bash
-pip install openai arize-phoenix-otel
+pip install openai arize-phoenix-otel kaggle pandas scikit-learn
 ```
 
 #### 2. Correct configuration
@@ -130,3 +130,52 @@ The `toy_bench/toy_tabular` package adds a tiny internal benchmark for prototypi
    The script reuses the existing telemetry settings in `config.json`/`.env`, wraps the run in a `toybench.toy_tabular_run` span, and records step-level spans if tracing is enabled.
 
 All generated data (`data.npy`, `labels.npy`, `results.json`) remains local to the workspace and is ignored by git. Adjust defaults (e.g., number of steps) via the `"toy_bench"` block in `config.json`.
+
+---
+
+## NOMAD Kaggle Benchmark
+
+**What is this dataset?**  
+The [Nomad 2018 Predict Transparent Conductors](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) challenge asks you to predict the **bandgap energy (eV)** of candidate transparent conductors. Each row (≈2.4k total) represents a simulated crystal with:
+
+- crystal symmetry metadata (`spacegroup`, `number_of_total_atoms`)
+- composition ratios for Al/Ga/In
+- lattice vectors/angles
+- pre-computed formation energy per atom
+
+The bandgap determines whether a material conducts and remains optically transparent, so the benchmark evaluates how well the model captures subtle relationships between composition, lattice geometry, and energy.
+
+**How we use it**  
+We keep everything under `benchmarks/nomad/` so it stays isolated from the toy bench. A helper script downloads the raw CSVs into `kaggle-data/nomad/raw/`, another script converts them into normalized NumPy arrays plus summary stats, and an iterative LLM loop tunes a `HistGradientBoostingRegressor` against MAE while logging every step to Phoenix. Each iteration passes the previous configs + metrics and a condensed dataset context blob to the LLM so it has full awareness of what happened earlier.
+
+### Prerequisites
+1. **Join the competition** – sign in to Kaggle, open the [Nomad competition page](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors), click *Late Submission* and accept the terms/rules. Without this, the API (and often the UI) will block downloads with a 403 error.
+2. **Kaggle credentials** – place `~/.kaggle/kaggle.json` (or export `KAGGLE_USERNAME`/`KAGGLE_KEY`) so the Kaggle CLI/SDK can authenticate.
+3. **Dependencies** – ensure `pip install kaggle pandas scikit-learn` (already listed in the main setup section).
+
+### Workflow
+
+1. **Stage raw CSVs (manual-first)**
+   ```bash
+   mkdir -p kaggle-data/nomad/raw
+   kaggle competitions download -c nomad2018-predict-transparent-conductors -p kaggle-data/nomad/raw
+   (cd kaggle-data/nomad/raw && unzip nomad2018-predict-transparent-conductors.zip && unzip train.csv.zip && unzip test.csv.zip && unzip sample_submission.csv.zip)
+   ```
+   The `kaggle competitions download` command assumes you already joined/accepted rules for this competition. If you cannot gain access, download from the Kaggle UI and drop `train.csv`, `test.csv`, and `sample_submission.csv` into `kaggle-data/nomad/raw`.  
+   Optional helpers:
+   - Copy from an existing mirror: `python scripts/fetch_nomad.py --local-source /path/to/raw_dir`
+   - Re-download with API access: `python scripts/fetch_nomad.py --dataset competitions/nomad2018-predict-transparent-conductors`
+
+2. **Prepare arrays + context metadata**
+   ```bash
+   python scripts/prepare_nomad.py --float32
+   ```
+   This validates the presence of `train.csv` and `test.csv`, then emits `features.npy`, `targets.npy`, `dataset_context.json`, etc., into `benchmarks/nomad/workspace/`.
+
+3. **Run the iterative bench with Phoenix tracing**
+   ```bash
+   python run_nomad_bench.py --config config.json --num-steps 3
+   ```
+   The LLM (or heuristic fallback) proposes new hyperparameters for a `HistGradientBoostingRegressor` using prior metrics + configs, and each iteration is logged to Phoenix (`nomad.bench.iteration` spans). Adjust defaults via the `"nomad_bench"` block in `config.json`.
+
+Each NOMAD iteration records the previous step’s metric/config along with dataset context so Phoenix traces show exactly what information the model had when proposing changes. The final JSON result contains the full history so you can audit how the agent explored the hyperparameter space.

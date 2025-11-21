@@ -32,6 +32,10 @@
       "auto_instrument": false
     }
   },
+  "nomad_bench": {
+    "num_steps": 3,
+    "history_window": 5
+  },
   "toy_bench": {
     "num_steps": 3
   }
