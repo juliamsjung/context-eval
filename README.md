@@ -137,6 +137,6 @@ This command generates plots based on the data in `all_results.json` (file that 
 python toy_bench/toy_tabular/workspace/plot.py
 ```
 
-Currently, plots...
+Currently, plots plot...
 
 1. **Iteration vs Accuracy**
