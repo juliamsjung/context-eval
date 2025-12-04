@@ -21,6 +21,17 @@ Our goal for Q1 is to build a framework to systematically evaluate how different
 python3 script.py --config config.json
 ```
 
+### Create & activate a virtual environment
+Using a venv keeps the Kaggle CLI, Phoenix SDK, and OpenAI client pinned to the same versions across machines. Run the following once per clone:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate         # macOS/Linux
+# .\venv\Scripts\activate        # Windows PowerShell
+```
+
+Every time you work in the repo, activate the venv first so the `kaggle` CLI and `pip` resolve to `venv/bin`.
+
 ### Environment Variables
 - Copy the provided `.env` template (or create one) in the repo root. The code loads it automatically on import, so no manual `export` is needed. Keep this file untracked.
 
@@ -163,6 +174,8 @@ We keep everything under `benchmarks/nomad/` so it stays isolated from the toy b
    The LLM (or heuristic fallback) proposes new hyperparameters for a `HistGradientBoostingRegressor` using prior metrics + configs, and each iteration is logged to Phoenix (`nomad.bench.iteration` spans). Adjust defaults via the `"nomad_bench"` block in `config.json`.
 
 Each NOMAD iteration records the previous step’s metric/config along with dataset context so Phoenix traces show exactly what information the model had when proposing changes. The final JSON result contains the full history so you can audit how the agent explored the hyperparameter space.
+
+> **Tip:** After installing the Kaggle CLI inside the venv, you can verify it’s wired up by running `kaggle --version`. If the command succeeds only when the venv is active, you’re configured correctly.
 
 ## Visualize With Plots
 This command generates plots based on the data in `all_results.json` (file that contains all results from each iteration of a single run).
