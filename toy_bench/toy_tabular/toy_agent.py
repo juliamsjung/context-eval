@@ -16,6 +16,9 @@ except ImportError:  # pragma: no cover
 from code import get_env_var  # Reuse existing .env handling
 from toy_bench.toy_tabular.toy_env import ToyTabularEnv
 
+from logging_utils import start_run
+import hashlib
+
 TOY_TABULAR = Path(__file__).resolve().parent
 ALL_RESULTS_PATH = TOY_TABULAR / "workspace" / "all_results.json"
 
@@ -109,6 +112,27 @@ def run_toy_tabular(
     config = env.read_config()
     history: List[Dict[str, Any]] = []
 
+    # --- RunLogger setup ---
+    config_json = json.dumps(config, sort_keys=True)
+    config_hash = hashlib.sha1(config_json.encode("utf-8")).hexdigest()[:10]
+    agent_id = "toy_logreg"
+    dataset_id = "toy_tabular"
+    task_id = "toy_tabular"
+    # For simplicity, seed can be fixed or fetched from config if available
+    seed = config.get("seed", 0)
+
+    logger = start_run(
+        task_id=task_id,
+        dataset_id=dataset_id,
+        agent_id=agent_id,
+    )
+    logger.log_run_start(
+        config_hash=config_hash,
+        max_steps=num_steps,
+        seed=seed,
+        notes="Toy tabular run with RunLogger"
+    )
+
     print("===> Baseline run")
     baseline_results = env.run_train()
     history.append({"config": config.copy(), "accuracy": baseline_results["accuracy"]})
@@ -116,6 +140,17 @@ def run_toy_tabular(
 
     with open(ALL_RESULTS_PATH, 'w') as f:
         json.dump([], f, indent=2)
+
+    logger.log_op(
+        "op.train",
+        step_idx=0,
+        details={
+            "C": config["C"],
+            "max_iter": config["max_iter"],
+            "accuracy": baseline_results["accuracy"],
+            "source": "baseline"
+        },
+    )
 
     for step in range(1, num_steps + 1):
         print(f"\n===> Step {step}/{num_steps}")
@@ -125,6 +160,15 @@ def run_toy_tabular(
             print("Using heuristic proposal:", proposal)
         else:
             print("LLM proposal:", proposal)
+        
+        logger.log_op(
+            "op.config_proposal",
+            step_idx=step,
+            details={
+                "proposal": proposal,
+                "using_llm": proposal is not None and step > 0,
+            },
+        )
 
         config.update({k: proposal[k] for k in ("C", "max_iter") if k in proposal})
         env.write_config(config)
@@ -154,6 +198,25 @@ def run_toy_tabular(
                         "benchmark.max_iter": config["max_iter"],
                     },
                 )
+            logger.log_op(
+                "op.train",
+                step_idx=step,
+                details={
+                    "C": config["C"],
+                    "max_iter": config["max_iter"],
+                    "accuracy": last_results["accuracy"],
+                },
+            )
+            logger.log_step_summary(
+                step_idx=step,
+                details={
+                    "metrics": {"accuracy": last_results["accuracy"]},
+                    "config": {"C": config["C"], "max_iter": config["max_iter"]},
+                    "decision": {
+                        "source": "llm" if proposal is not None and step > 0 else "heuristic"
+                    }
+                }
+            )
 
         history.append({"config": config.copy(), "accuracy": last_results["accuracy"]})
         print("Result:", json.dumps(last_results, indent=2))
@@ -165,6 +228,12 @@ def run_toy_tabular(
     }
     print("\n===> Final summary")
     print(json.dumps(final, indent=2))
+    logger.log_run_end(
+        status="success",
+        final_metric=last_results["accuracy"],
+        best_step_idx=step,
+        n_steps=num_steps,
+    )
     return final
 
 

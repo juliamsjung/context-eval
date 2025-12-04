@@ -15,6 +15,9 @@ except ImportError:  # pragma: no cover
 from code import get_env_var
 from benchmarks.nomad.env import NomadEnv
 
+from logging_utils import start_run
+import hashlib
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_HISTORY_WINDOW = 5
@@ -206,6 +209,25 @@ def run_nomad_bench(
     context_summary = env.read_context()
     history: List[Dict[str, Any]] = []
 
+    config_json = json.dumps(config, sort_keys=True)
+    config_hash = hashlib.sha1(config_json.encode("utf-8")).hexdigest()[:10]
+    agent_id = config.get("model_id", "nomad_agent")
+    dataset_id = "nomad"
+    task_id = "nomad"
+    seed = config.get("random_seed", 0)
+
+    logger = start_run(
+        task_id=task_id,
+        dataset_id=dataset_id,
+        agent_id=agent_id,
+    )
+    logger.log_run_start(
+        config_hash=config_hash,
+        max_steps=num_steps,
+        seed=seed,
+        notes="NOMAD run with RunLogger"
+    )
+
     print("===> Baseline run (NOMAD)")
     baseline_results = env.run_train()
     _record_history_entry(
@@ -217,6 +239,16 @@ def run_nomad_bench(
         context_summary=context_summary,
     )
     last_results = baseline_results
+
+    logger.log_op(
+        "op.train",
+        step_idx=0,
+        details={
+            "config": config,
+            "results": baseline_results,
+            "source": "baseline",
+        },
+    )
 
     for step in range(1, num_steps + 1):
         print(f"\n===> NOMAD Step {step}/{num_steps}")
@@ -234,6 +266,15 @@ def run_nomad_bench(
             print("Using heuristic proposal:", proposal)
         else:
             print("LLM proposal:", proposal)
+
+        logger.log_op(
+            "op.config_proposal",
+            step_idx=step,
+            details={
+                "proposal": proposal,
+                "using_llm": proposal is not None and step > 0,
+            },
+        )
 
         config.update(proposal)
         env.write_config(config)
@@ -285,6 +326,26 @@ def run_nomad_bench(
                         "benchmark.history_length": len(history),
                     },
                 )
+        logger.log_op(
+            "op.train",
+            step_idx=step,
+            details={
+                "config": config,
+                "results": last_results,
+                "source": proposal_source,
+            },
+        )
+
+        logger.log_step_summary(
+
+            step_idx=step,
+            details={
+                "metrics": last_results.get("metrics", {}),
+                "config": config,
+                "decision": {"source": proposal_source},
+                "context": context_summary,
+            },
+        )
 
         _record_history_entry(
             history,
@@ -306,6 +367,13 @@ def run_nomad_bench(
     }
     print("\n===> Final NOMAD summary")
     print(json.dumps(final, indent=2))
+
+    logger.log_run_end(
+        status="success",
+        final_metric=last_results.get("metric_value"),
+        best_step_idx=step,
+        n_steps=num_steps,
+    )
     return final
 
 
