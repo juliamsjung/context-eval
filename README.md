@@ -210,7 +210,7 @@ What gets logged
   - All spans include `policy_type` and `reasoning_mode`.
 - Local traces (default, no extra config): each NOMAD run is a single JSONL file under `traces/nomad/` named `nomad_<timestamp>.jsonl` with events `run.start`, `op.*`, `step.summary`, and `agent.iteration` (the last embeds the full iteration payload, including clarifying questions/answers and usage). Clarifying questions are answered within the same iteration and carried into subsequent iterations via `clarification_hints`, so the clarifier tool can reuse past answers.
 
-Current NOMAD workflow (high level, with clarifiers)
+Current NOMAD workflow (high level overview)
 1) Baseline
    - Train `HistGradientBoostingRegressor` once; log metrics/config to traces as step 0.
 2) Per iteration (agentic mode)
