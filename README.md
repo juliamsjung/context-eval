@@ -175,6 +175,68 @@ We keep everything under `benchmarks/nomad/` so it stays isolated from the toy b
 
 Each NOMAD iteration records the previous step’s metric/config along with dataset context so Phoenix traces show exactly what information the model had when proposing changes. The final JSON result contains the full history so you can audit how the agent explored the hyperparameter space.
 
+## Agentic context policies (short vs long) and modes (agentic vs controller)
+
+We now support explicit context policies and reasoning modes so you can compare:
+- `policy_type`: `short_context` (tight retrieval, encourages clarifications) vs `long_context` (large retrieval budget, fewer clarifications).
+- `reasoning_mode`: `agentic` (ReAct-style loop with tools) vs `controller` (legacy single-shot loop).
+
+Configuration
+- See `config.json`:
+  - Top-level `policy_type` and `reasoning_mode` defaults.
+  - `context_policies` block defines retrieval budgets per policy.
+  - `agentic` block defines agent loop parameters (model, temperature, max_steps, max_tokens, log path, result schema).
+- You can override via CLI flags on any entry point that supports them.
+
+Run the NOMAD task with different settings
+- Agentic + short context:
+  ```bash
+  python run_nomad_bench.py --config config.json --policy-type short_context --reasoning-mode agentic --num-steps 3
+  ```
+- Agentic + long context:
+  ```bash
+  python run_nomad_bench.py --config config.json --policy-type long_context --reasoning-mode agentic --num-steps 3
+  ```
+- Controller (legacy) + short context (default):
+  ```bash
+  python run_nomad_bench.py --config config.json --policy-type short_context --reasoning-mode controller --num-steps 3
+  ```
+
+What gets logged
+- Phoenix spans:
+  - `nomad.bench.run`: one span per full NOMAD run.
+  - `nomad.bench.iteration`: one per training iteration (after applying a proposal) with metrics/configs.
+  - `agent.runner.step`: only in agentic mode; one per LLM/tool step inside an iteration (captures thought/action/usage).
+  - All spans include `policy_type` and `reasoning_mode`.
+- Local traces (default, no extra config): each NOMAD run is a single JSONL file under `traces/nomad/` named `nomad_<timestamp>.jsonl` with events `run.start`, `op.*`, `step.summary`, and `agent.iteration` (the last embeds the full iteration payload, including clarifying questions/answers and usage). Clarifying questions are answered within the same iteration and carried into subsequent iterations via `clarification_hints`, so the clarifier tool can reuse past answers.
+
+Current NOMAD workflow (high level, with clarifiers)
+1) Baseline
+   - Train `HistGradientBoostingRegressor` once; log metrics/config to traces as step 0.
+2) Per iteration (agentic mode)
+   - Build state with dataset context, recent history (configs/metrics/clarifications), and `clarification_hints` carried from prior Q&A.
+   - LLM chooses an action: retrieve, summarize, ask clarifying, or final_answer.
+   - Tools run; observations (including clarifier answers) are fed back into the step and promoted into `clarification_hints` so later iterations can reuse them.
+   - If a proposal is produced, apply it, retrain, and record results.
+3) Logging
+   - Phoenix spans for run/iteration.
+   - Local JSONL per run in `traces/nomad/nomad_<timestamp>.jsonl` with `agent.iteration` entries that capture prompts, steps, tool outputs, clarifying flags/questions/answers, and usage.
+4) Inspecting outputs
+   - Final metrics/configs are printed to the console.
+   - Detailed per-step traces live in the JSONL file; Phoenix shows spans if telemetry is enabled.
+
+Quick reproduction checklist
+1) Install deps and set `.env` (OpenAI + Phoenix keys).  
+2) Prepare NOMAD data (`scripts/prepare_nomad.py`).  
+3) Choose policy/mode and run:
+   ```bash
+   python run_nomad_bench.py --config config.json --policy-type short_context --reasoning-mode agentic --num-steps 3
+   ```
+4) Inspect:
+   - Phoenix UI spans (`nomad.bench.run`, `nomad.bench.iteration`, `agent.runner.step` when agentic).
+   - `traces/nomad/nomad_<timestamp>.jsonl` for step-by-step details (including clarifiers).
+   - CLI JSON output for final config/metrics.
+
 > **Tip:** After installing the Kaggle CLI inside the venv, you can verify it’s wired up by running `kaggle --version`. If the command succeeds only when the venv is active, you’re configured correctly.
 
 ## Visualize With Plots

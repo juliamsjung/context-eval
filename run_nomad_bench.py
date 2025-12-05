@@ -20,12 +20,24 @@ def main() -> None:
         type=int,
         help="Number of previous entries to expose to the LLM prompt.",
     )
+    parser.add_argument(
+        "--policy-type",
+        choices=["short_context", "long_context"],
+        help="Select the context policy for this run.",
+    )
+    parser.add_argument(
+        "--reasoning-mode",
+        choices=["controller", "agentic"],
+        help="Toggle the reasoning style (agentic loop vs legacy controller).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     bench_cfg = cfg.get("nomad_bench", {})
     num_steps = args.num_steps or int(bench_cfg.get("num_steps", 3))
     history_window = args.history_window or int(bench_cfg.get("history_window", 5))
+    policy_type = args.policy_type or cfg.get("policy_type", "short_context")
+    reasoning_mode = args.reasoning_mode or cfg.get("reasoning_mode", "controller")
 
     tracer = PhoenixTracerManager(_phoenix_settings(cfg))
     span_cm = tracer.span(
@@ -35,6 +47,8 @@ def main() -> None:
             "dataset": "nomad2018-predict-transparent-conductors",
             "num_steps": num_steps,
             "history_window": history_window,
+            "policy_type": policy_type,
+            "reasoning_mode": reasoning_mode,
         },
     )
     try:
@@ -43,6 +57,9 @@ def main() -> None:
                 num_steps=num_steps,
                 tracer=tracer,
                 history_window=history_window,
+                policy_type=policy_type,
+                reasoning_mode=reasoning_mode,
+                config=cfg,
             )
             if span:
                 tracer.set_attributes(

@@ -16,10 +16,24 @@ def main():
     parser = argparse.ArgumentParser(description="Toy LLM system with context controller and tracing")
     parser.add_argument("--config", default="config.json", help="Path to JSON config")
     parser.add_argument("--trace", help="Path to trace output file (overrides config)")
+    parser.add_argument(
+        "--policy-type",
+        choices=["short_context", "long_context"],
+        help="Override the context policy selection.",
+    )
+    parser.add_argument(
+        "--reasoning-mode",
+        choices=["controller", "agentic"],
+        help="Choose whether to run the new agentic loop or the legacy controller.",
+    )
     args = parser.parse_args()
 
     # Load config
     cfg = load_config(args.config)
+    if args.policy_type:
+        cfg["policy_type"] = args.policy_type
+    if args.reasoning_mode:
+        cfg["reasoning_mode"] = args.reasoning_mode
     
     # Override trace path if provided
     if args.trace:
