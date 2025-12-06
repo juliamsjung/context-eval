@@ -246,7 +246,7 @@ class AgentRunner:
                 iteration_entry=iteration_entry,
                 dataset_id=self.dataset_id,
                 agent_id=self.agent_id,
-            )
+        )
 
         return AgentRunResult(
             final_answer=final_answer,

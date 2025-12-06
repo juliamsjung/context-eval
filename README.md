@@ -59,7 +59,7 @@ PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/<space-id>/v1/traces
 - **Project name**: Any string; we default to `toy-llm` and reference it when filtering traces in Phoenix. This can be changed.
 
 ### Observability (Arize Phoenix)
-Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (already true in the repo). During a run the system emits both local JSONL traces (`traces/run.jsonl`) and Phoenix spans (LLM API calls, iteration metadata, evaluations).
+Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (already true in the repo). During a run the system emits Phoenix spans and local JSONL traces (locations differ by task; see Toy Bench and NOMAD sections).
 
 #### Phoenix setup & verification
 1. **Create credentials**  
@@ -105,26 +105,33 @@ Set `"telemetry": { "phoenix": { "enabled": true } }` in `config.json` (already 
 
 ---
 
-## Toy Bench (Q1 scaffolding)
+## Toy Bench (toy_tabular)
 
-The `toy_bench/toy_tabular` package adds a tiny internal benchmark for prototyping context policies and Phoenix tracing before moving to MLAgentBench.
+The `toy_bench/toy_tabular` package is a small logistic-regression tuning loop for fast iteration and tracing.
 
-1. **Install extra dependency**
-   ```bash
-   pip install scikit-learn
-   ```
-2. **Run the standalone agent loop**
-   ```bash
-   python -m toy_bench.toy_tabular.toy_agent
-   ```
-   This performs a baseline run plus three LLM-guided (or heuristic) config proposals, saving artifacts inside `toy_bench/toy_tabular/workspace/`.
-3. **Run under Phoenix tracing (opt-in)**
-   ```bash
-   python run_toy_bench.py --config config.json --num-steps 3
-   ```
-   The script reuses the existing telemetry settings in `config.json`/`.env`, wraps the run in a `toybench.toy_tabular_run` span, and records step-level spans if tracing is enabled.
+**Dependencies**
+- Requires scikit-learn:
+  ```bash
+  pip install scikit-learn
+  ```
 
-All generated data (`data.npy`, `labels.npy`, `results.json`) remains local to the workspace and is ignored by git. Adjust defaults (e.g., number of steps) via the `"toy_bench"` block in `config.json`.
+**How to run**
+- Standalone loop (no Phoenix spans):
+  ```bash
+  python -m toy_bench.toy_tabular.toy_agent
+  ```
+  Runs a baseline plus three LLM/heuristic proposals; artifacts are saved in `toy_bench/toy_tabular/workspace/`.
+- With Phoenix tracing:
+  ```bash
+  python run_toy_bench.py --config config.json --num-steps 3
+  ```
+  Emits spans `toybench.toy_tabular_run` and `toybench.toy_tabular.iteration` when telemetry is enabled, and writes local traces to `traces/toy_bench/toy_tabular_<timestamp>.jsonl`.
+
+**Outputs**
+- Workspace artifacts: `toy_bench/toy_tabular/workspace/` (ignored by git).
+- Local traces: `traces/toy_bench/toy_tabular_<timestamp>.jsonl` (per run).
+- Phoenix spans: `toybench.toy_tabular_run`, `toybench.toy_tabular.iteration` (if telemetry enabled).
+- CLI prints final accuracy/config.
 
 ---
 
@@ -185,10 +192,10 @@ Configuration
 - See `config.json`:
   - Top-level `policy_type` and `reasoning_mode` defaults.
   - `context_policies` block defines retrieval budgets per policy.
-  - `agentic` block defines agent loop parameters (model, temperature, max_steps, max_tokens, log path, result schema).
+  - `agentic` block defines agent loop parameters (model, temperature, max_steps, max_tokens, result schema).
 - You can override via CLI flags on any entry point that supports them.
 
-Run the NOMAD task with different settings
+Run the NOMAD task with different settings (with 3 iterations)
 - Agentic + short context:
   ```bash
   python run_nomad_bench.py --config config.json --policy-type short_context --reasoning-mode agentic --num-steps 3
@@ -200,6 +207,10 @@ Run the NOMAD task with different settings
 - Controller (legacy) + short context (default):
   ```bash
   python run_nomad_bench.py --config config.json --policy-type short_context --reasoning-mode controller --num-steps 3
+  ```
+- Controller (legacy) + long context:
+  ```bash
+  python run_nomad_bench.py --config config.json --policy-type long_context --reasoning-mode controller --num-steps 3
   ```
 
 What gets logged
@@ -226,15 +237,20 @@ Current NOMAD workflow (high level overview)
    - Detailed per-step traces live in the JSONL file; Phoenix shows spans if telemetry is enabled.
 
 Quick reproduction checklist
-1) Install deps and set `.env` (OpenAI + Phoenix keys).  
-2) Prepare NOMAD data (`scripts/prepare_nomad.py`).  
-3) Choose policy/mode and run:
+- Shared setup: install deps and set `.env` (OpenAI + Phoenix keys).
+
+NOMAD
+1) Prepare data:
+   ```bash
+   python scripts/prepare_nomad.py --float32
+   ```
+2) Run (example agentic short-context):
    ```bash
    python run_nomad_bench.py --config config.json --policy-type short_context --reasoning-mode agentic --num-steps 3
    ```
-4) Inspect:
-   - Phoenix UI spans (`nomad.bench.run`, `nomad.bench.iteration`, `agent.runner.step` when agentic).
-   - `traces/nomad/nomad_<timestamp>.jsonl` for step-by-step details (including clarifiers).
+3) Inspect:
+   - Phoenix UI spans: `nomad.bench.run`, `nomad.bench.iteration`, `agent.runner.step` (agentic only).
+   - Local trace: `traces/nomad/nomad_<timestamp>.jsonl` (includes clarifiers, steps, usage).
    - CLI JSON output for final config/metrics.
 
 > **Tip:** After installing the Kaggle CLI inside the venv, you can verify it’s wired up by running `kaggle --version`. If the command succeeds only when the venv is active, you’re configured correctly.

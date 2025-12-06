@@ -187,13 +187,13 @@ def _propose_config(
     *,
     context_summary: Optional[Dict[str, Any]] = None,
     history_window: int = DEFAULT_HISTORY_WINDOW,
-) -> Optional[Dict[str, Any]]:
+) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     if not OPENAI_AVAILABLE:
-        return None
+        return None, None
 
     api_key = get_env_var("OPENAI_API_KEY")
     if not api_key:
-        return None
+        return None, None
 
     prompt_payload = {
         "current_config": {k: config[k] for k in PARAM_BOUNDS.keys() if k in config},
@@ -213,6 +213,7 @@ def _propose_config(
     )
 
     client = OpenAI(api_key=api_key)
+    t0 = datetime.utcnow().timestamp()
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0.2,
@@ -225,15 +226,22 @@ def _propose_config(
             {"role": "user", "content": user_prompt},
         ],
     )
+    latency = datetime.utcnow().timestamp() - t0
     content = resp.choices[0].message.content or ""
+    usage: Dict[str, Any] = {
+        "input_tokens": resp.usage.prompt_tokens,
+        "output_tokens": resp.usage.completion_tokens,
+        "total_tokens": resp.usage.total_tokens,
+        "latency_sec": latency,
+    }
     try:
         proposal = _safe_parse_json(content)
     except Exception:
         logger.warning("LLM response was not valid JSON: %s", content)
-        return None
+        return None, usage
 
     sanitized = _sanitize_proposal(proposal)
-    return sanitized or None
+    return sanitized or None, usage
 
 
 def _fallback_config(current: Dict[str, Any], step_idx: int) -> Dict[str, Any]:
@@ -340,6 +348,7 @@ def run_nomad_bench(
     for step in range(1, num_steps + 1):
         print(f"\n===> NOMAD Step {step}/{num_steps}")
         agent_metrics: Optional[Dict[str, Any]] = None
+        clarifications: List[Dict[str, Any]] = []
 
         if reasoning_mode == "agentic" and agent_runner:
             # Build clarification hints from prior iterations (questions/answers), plus defaults.
@@ -377,7 +386,7 @@ def run_nomad_bench(
                 proposal_source = f"agent:{policy_obj.name if policy_obj else policy_type}"
                 print("Agent proposal:", proposal)
             else:
-                proposal = _propose_config(
+                proposal, llm_usage = _propose_config(
                     model_config,
                     last_results,
                     history,
@@ -387,8 +396,9 @@ def run_nomad_bench(
                 proposal_source = "agent_fallback_llm" if proposal else "agent_fallback_heuristic"
                 if not proposal:
                     proposal = _fallback_config(model_config, step)
+                agent_metrics = llm_usage
         else:
-            proposal = _propose_config(
+            proposal, llm_usage = _propose_config(
                 model_config,
                 last_results,
                 history,
@@ -399,6 +409,7 @@ def run_nomad_bench(
             if not proposal:
                 proposal = _fallback_config(model_config, step)
                 proposal_source = "heuristic"
+            agent_metrics = llm_usage
 
         if proposal_source.startswith("agent") and not proposal:
             proposal = _fallback_config(model_config, step)
@@ -413,7 +424,7 @@ def run_nomad_bench(
                 "proposal": proposal,
                 "using_llm": proposal is not None and proposal_source.startswith("llm"),
                 "proposal_source": proposal_source,
-                "agent_metrics": agent_metrics,
+                "agent_metrics": agent_metrics or {},
             },
         )
 
