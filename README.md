@@ -8,7 +8,7 @@ Our project aims to explore how to evaluate LLM systems with a focus on how cont
 ## Task: ML Experimentation
 Our goal for Q1 is to build a framework to systematically evaluate how different context policies (history management, summarization, retrieval, structured state, budget-aware mixing) affect LLM-based ML experimentation. We evaluate agents **as ML experimenters**. An agent plans, writes code, calls tools, and manages files to complete compact ML tasks. Heavily inspired by Stanford's MLAgentBench (https://arxiv.org/pdf/2310.03302) and OpenAI's MLEBench (https://arxiv.org/pdf/2410.07095).
 
-![](figs/architecture.png)
+![](figs/new_architecture.png)
 
 **Task format:**
 - **Actions:** edit files, run tests/metrics, parse tracebacks, update prompt/tool/memory.
