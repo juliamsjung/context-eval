@@ -13,10 +13,10 @@ except ImportError:  # pragma: no cover
     OpenAI = None  # type: ignore
     OPENAI_AVAILABLE = False
 
-from code import get_env_var  # Reuse existing .env handling
+from src.utils.config import get_env_var
 from toy_bench.toy_tabular.toy_env import ToyTabularEnv
 
-from logging_utils import start_run
+from src.utils.logging import start_run
 import hashlib
 
 TOY_TABULAR = Path(__file__).resolve().parent

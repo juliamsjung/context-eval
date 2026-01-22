@@ -1,3 +1,4 @@
+"""Context policies for agent behavior control."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

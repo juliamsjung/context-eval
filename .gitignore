@@ -64,3 +64,7 @@ benchmarks/nomad/workspace/dataset_context.json
 benchmarks/nomad/workspace/prepared_meta.json
 benchmarks/nomad/workspace/results.json
 
+# New directories for experiment outputs
+outputs/
+data/
+

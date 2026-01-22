@@ -1,3 +1,4 @@
+"""Run logging utilities for JSONL trace output."""
 from __future__ import annotations
 
 import json
@@ -6,12 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# Root directory for all traces
+# Root directory for all traces - can be overridden by CLI
 TRACES_ROOT = Path("traces")
+
 
 def _now_iso() -> str:
     """Return current UTC timestamp in ISO-8601 format with seconds precision and trailing Z."""
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
 
 def _default_run_id(task_id: str) -> str:
     """
@@ -20,6 +23,7 @@ def _default_run_id(task_id: str) -> str:
     """
     ts = datetime.utcnow().isoformat(timespec="seconds").replace(":", "-")
     return f"{task_id}_{ts}Z"
+
 
 @dataclass
 class RunLogger:
@@ -88,33 +92,36 @@ class RunLogger:
     def log_run_end(
         self,
         *,
-        status: str,
-        final_metric: float | None,
-        best_step_idx: int | None,
-        n_steps: int,
+        status: str = "success",
+        final_metric: float | None = None,
+        best_step_idx: int | None = None,
+        n_steps: int = 0,
         total_tokens: int | None = None,
         total_api_cost: float | None = None,
         total_latency_sec: float | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         """
         Log the end of a run. This should be called exactly once per run.
         """
-        details = {
-            "status": status,  # e.g. 'success', 'error', 'timeout'
+        payload = {
+            "status": status,
             "final_metric": final_metric,
             "best_step_idx": best_step_idx,
             "n_steps": n_steps,
         }
         if total_tokens is not None:
-            details["total_tokens"] = total_tokens
+            payload["total_tokens"] = total_tokens
         if total_api_cost is not None:
-            details["total_api_cost"] = total_api_cost
+            payload["total_api_cost"] = total_api_cost
         if total_latency_sec is not None:
-            details["total_latency_sec"] = total_latency_sec
+            payload["total_latency_sec"] = total_latency_sec
+        if details:
+            payload["extra"] = details
         self._write(
             event_type="run.end",
             step_idx=best_step_idx,
-            details=details,
+            details=payload,
         )
 
     def log_op(self, event_type: str, step_idx: int, details: dict[str, Any]) -> None:
@@ -144,6 +151,7 @@ class RunLogger:
         """
         self._write(event_type="step.summary", step_idx=step_idx, details=details)
 
+
 def start_run(
     *,
     task_id: str,
@@ -160,7 +168,7 @@ def start_run(
     - run_id: optional explicit run_id; otherwise auto-generated from task_id + timestamp
 
     The resulting JSONL file lives at:
-        traces/{task_id}/{run_id}.jsonl
+        {TRACES_ROOT}/{task_id}/{run_id}.jsonl
     """
     if run_id is None:
         run_id = _default_run_id(task_id)

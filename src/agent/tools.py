@@ -1,3 +1,4 @@
+"""Tool definitions for agent systems."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -94,3 +95,64 @@ def build_nomad_tools(
         ),
     }
 
+
+def build_toy_tools(
+    *,
+    context_summary: Dict[str, Any],
+    retrieval_config: Dict[str, Any],
+    clarifier_defaults: Optional[Dict[str, str]] = None,
+) -> Dict[str, Tool]:
+    """Create toolset for Toy benchmark (simpler than NOMAD)."""
+
+    chunks = _serialize_context_chunks(context_summary)
+    clarifier_defaults = clarifier_defaults or {
+        "what metric should i optimize?": "Accuracy - higher is better.",
+        "what are the parameter bounds?": "C: 0.01-100.0, max_iter: 10-1000",
+    }
+
+    def _retrieve_docs(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
+        k = int(action_input.get("k") or retrieval_config.get("max_retrieved_chunks", 3))
+        k = max(1, min(k, len(chunks)))
+        snippet = "\n".join(chunks[:k])
+        return ToolResult(
+            content=snippet[: retrieval_config.get("chunk_char_limit", 600)],
+            metadata={"chunks_returned": k},
+        )
+
+    def _summarize(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
+        text = action_input.get("text") or ""
+        limit = retrieval_config.get("summary_char_limit", 400)
+        summary_text = " ".join(text.strip().split())[:limit]
+        return ToolResult(
+            content=summary_text,
+            metadata={"original_length": len(text), "summary_length": len(summary_text)},
+        )
+
+    def _clarify(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
+        question = (action_input.get("question") or "").strip().lower()
+        answer = clarifier_defaults.get(question)
+        if not answer:
+            hint_fields = state.get("clarification_hints", {})
+            answer = hint_fields.get(question, "No additional information available.")
+        return ToolResult(
+            content=answer,
+            metadata={"question": question, "auto_answered": True},
+        )
+
+    return {
+        "retrieve_docs": Tool(
+            name="retrieve_docs",
+            description="Fetches context about the Toy benchmark task and parameters.",
+            handler=_retrieve_docs,
+        ),
+        "summarize_chunks": Tool(
+            name="summarize_chunks",
+            description="Summarizes text to highlight important information.",
+            handler=_summarize,
+        ),
+        "ask_clarifying_question": Tool(
+            name="ask_clarifying_question",
+            description="Asks for clarification about the task.",
+            handler=_clarify,
+        ),
+    }

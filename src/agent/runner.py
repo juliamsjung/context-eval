@@ -1,8 +1,8 @@
+"""Agent runner with ReAct-style execution loop."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
-from contextlib import nullcontext
 from pathlib import Path
 from datetime import datetime
 import json
@@ -17,10 +17,10 @@ except ImportError:  # pragma: no cover
     OpenAI = None  # type: ignore
     OPENAI_AVAILABLE = False
 
-from code import get_env_var
-from .context_policies import ContextPayload, ContextPolicy
-from .run_logging import AgentRunLogger, AgentStepLog
-from .tools import Tool, ToolResult
+from src.utils.config import get_env_var
+from src.agent.policies import ContextPayload, ContextPolicy
+from src.agent.run_logging import AgentRunLogger, AgentStepLog
+from src.agent.tools import Tool, ToolResult
 
 
 @dataclass
@@ -45,6 +45,7 @@ class AgentRunResult:
     structured_output: Dict[str, Any] = field(default_factory=dict)
     raw_response: Optional[str] = None
     iteration_entry: Dict[str, Any] = field(default_factory=dict)
+    token_usage: Dict[str, int] = field(default_factory=dict)
 
 
 class AgentRunner:
@@ -56,13 +57,11 @@ class AgentRunner:
         policy: ContextPolicy,
         tools: Dict[str, Tool],
         logger: Optional[AgentRunLogger] = None,
-        tracer: Any = None,
         config: Optional[Dict[str, Any]] = None,
     ):
         self.policy = policy
         self.tools = tools
         self.logger = logger
-        self.tracer = tracer
         self.config = config or {}
         self.model = self.config.get("model", "gpt-4o-mini")
         self.temperature = float(self.config.get("temperature", 0.0))
@@ -107,108 +106,71 @@ class AgentRunner:
             )
 
         for step_idx in range(1, self.max_steps + 1):
-            span_cm = (
-                self.tracer.span(
-                    "agent.runner.step",
+            response_text, usage = self._call_model(messages)
+            total_usage = _accumulate_usage(total_usage, usage)
+            command = self._parse_action(response_text)
+            thought = command.get("thought", "").strip()
+            action = command.get("action", "").strip()
+            action_input = command.get("action_input") or {}
+            clarifying = action == "ask_clarifying_question"
+            clarifying_question = action_input.get("question") if clarifying else None
+
+            observation = ""
+            tool_output = None
+            if action == "final_answer":
+                final_answer = action_input.get("answer", response_text)
+                structured_output = action_input
+                observation = "Final answer produced."
+                messages.append({"role": "assistant", "content": response_text})
+            elif action in self.tools:
+                tool = self.tools[action]
+                tool_result = tool.run(action_input, state)
+                tool_output = tool_result.content
+                observation = f"{tool.name} => {tool_output}"
+                messages.append({"role": "assistant", "content": response_text})
+                messages.append(
                     {
-                        "agent.step_idx": step_idx,
-                        "agent.policy": self.policy.name,
-                        "agent.reasoning_mode": reasoning_mode,
-                    },
+                        "role": "user",
+                        "content": f"Observation: {tool_result.content}",
+                    }
                 )
-                if self.tracer
-                else nullcontext()
+            else:
+                observation = "Unknown action requested; stopping."
+                final_answer = response_text
+
+            step_latency = usage.get("latency_sec", 0.0)
+            agent_step = AgentStep(
+                step_idx=step_idx,
+                thought=thought,
+                action=action,
+                action_input=action_input,
+                observation=observation,
+                tool_output=tool_output,
+                latency_sec=step_latency,
+                usage=usage,
+                clarifying=clarifying,
+                clarifying_question=clarifying_question,
             )
-            with span_cm as step_span:
-                if step_span:
-                    prompt_summary = _truncate_json(messages, 900)
-                    self.tracer.set_attributes(
-                        step_span,
-                        {
-                            "agent.prompt.summary": prompt_summary,
-                            "agent.prompt.hash": _hash_text(prompt_summary),
-                            "agent.prompt.full": json.dumps(messages),
-                        },
-                    )
-                response_text, usage = self._call_model(messages)
-                total_usage = _accumulate_usage(total_usage, usage)
-                command = self._parse_action(response_text)
-                thought = command.get("thought", "").strip()
-                action = command.get("action", "").strip()
-                action_input = command.get("action_input") or {}
-                clarifying = action == "ask_clarifying_question"
-                clarifying_question = action_input.get("question") if clarifying else None
+            steps.append(agent_step)
 
-                observation = ""
-                tool_output = None
-                if action == "final_answer":
-                    final_answer = action_input.get("answer", response_text)
-                    structured_output = action_input
-                    observation = "Final answer produced."
-                    messages.append({"role": "assistant", "content": response_text})
-                elif action in self.tools:
-                    tool = self.tools[action]
-                    tool_result = tool.run(action_input, state)
-                    tool_output = tool_result.content
-                    observation = f"{tool.name} => {tool_output}"
-                    messages.append({"role": "assistant", "content": response_text})
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": f"Observation: {tool_result.content}",
-                        }
+            if self.logger:
+                self.logger.log_step(
+                    AgentStepLog(
+                        step_idx=step_idx,
+                        thought=thought,
+                        action=action,
+                        action_input=action_input,
+                        observation=observation,
+                        tool_output=tool_output,
+                        latency_sec=step_latency,
+                        tokens=usage,
+                        clarifying=clarifying,
+                        clarifying_question=clarifying_question,
                     )
-                else:
-                    observation = "Unknown action requested; stopping."
-                    final_answer = response_text
-
-                step_latency = usage.get("latency_sec", 0.0)
-                agent_step = AgentStep(
-                    step_idx=step_idx,
-                    thought=thought,
-                    action=action,
-                    action_input=action_input,
-                    observation=observation,
-                    tool_output=tool_output,
-                    latency_sec=step_latency,
-                    usage=usage,
-                    clarifying=clarifying,
-                    clarifying_question=clarifying_question,
                 )
-                steps.append(agent_step)
 
-                if self.logger:
-                    self.logger.log_step(
-                        AgentStepLog(
-                            step_idx=step_idx,
-                            thought=thought,
-                            action=action,
-                            action_input=action_input,
-                            observation=observation,
-                            tool_output=tool_output,
-                            latency_sec=step_latency,
-                            tokens=usage,
-                            clarifying=clarifying,
-                            clarifying_question=clarifying_question,
-                        )
-                    )
-
-                if step_span and usage:
-                    self.tracer.set_attributes(
-                        step_span,
-                        {
-                            "agent.action": action,
-                            "agent.thought": thought,
-                            "agent.observation": observation,
-                            "agent.latency": step_latency,
-                            "agent.usage.total_tokens": usage.get("total_tokens", 0),
-                            "agent.usage.input_tokens": usage.get("input_tokens", 0),
-                            "agent.usage.output_tokens": usage.get("output_tokens", 0),
-                        },
-                    )
-
-                if action == "final_answer" or not action or observation.startswith("Unknown action"):
-                    break
+            if action == "final_answer" or not action or observation.startswith("Unknown action"):
+                break
 
         elapsed = time.time() - start
         metrics = {
@@ -258,6 +220,7 @@ class AgentRunner:
             structured_output=structured_output,
             raw_response=final_answer,
             iteration_entry=iteration_entry,
+            token_usage=total_usage,
         )
 
     # Internal helpers ----------------------------------------------------------
@@ -477,7 +440,8 @@ def _append_iteration_trace(
     log_root: Path | None = None,
 ) -> None:
     """Append an iteration event to traces/{task_id}/{run_id}.jsonl."""
-    root = log_root or Path("traces") / task_id
+    from src.utils.logging import TRACES_ROOT
+    root = log_root or TRACES_ROOT / task_id
     root.mkdir(parents=True, exist_ok=True)
     path = root / f"{run_id}.jsonl"
 
@@ -498,4 +462,3 @@ def _append_iteration_trace(
 
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event) + "\n")
-
