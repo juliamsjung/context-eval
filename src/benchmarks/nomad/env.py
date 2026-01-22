@@ -13,7 +13,7 @@ class NomadEnv:
 
     def __init__(self, workspace: Path | None = None):
         # Use the old benchmarks location for now for backwards compatibility
-        default_workspace = Path(__file__).resolve().parents[3] / "benchmarks" / "nomad" / "workspace"
+        default_workspace = Path(__file__).resolve().parent / "workspace"
         self.workspace = workspace or default_workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
 

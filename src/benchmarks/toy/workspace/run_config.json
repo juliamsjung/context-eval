@@ -1,0 +1,6 @@
+{
+  "C": 0.0447,
+  "max_iter": 300,
+  "test_size": 0.2,
+  "random_seed": 0
+}

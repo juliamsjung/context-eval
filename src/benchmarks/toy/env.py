@@ -13,7 +13,7 @@ class ToyTabularEnv:
 
     def __init__(self, workspace: Path | None = None):
         # Use the old toy_bench location for now for backwards compatibility
-        default_workspace = Path(__file__).resolve().parents[3] / "toy_bench" / "toy_tabular" / "workspace"
+        default_workspace = Path(__file__).resolve().parent / "workspace"
         self.workspace = workspace or default_workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
 
