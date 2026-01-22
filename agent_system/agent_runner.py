@@ -216,7 +216,10 @@ class AgentRunner:
             "steps": len(steps),
             "clarifying_questions": sum(1 for s in steps if s.clarifying),
             "total_tokens": total_usage.get("total_tokens", 0),
+            "input_tokens": total_usage.get("input_tokens", 0),
+            "output_tokens": total_usage.get("output_tokens", 0),
             "latency_sec": elapsed,
+            "model": self.model,
         }
 
         if self.logger:

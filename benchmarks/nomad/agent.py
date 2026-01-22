@@ -233,6 +233,7 @@ def _propose_config(
         "output_tokens": resp.usage.completion_tokens,
         "total_tokens": resp.usage.total_tokens,
         "latency_sec": latency,
+        "model": "gpt-4o-mini",
     }
     try:
         proposal = _safe_parse_json(content)
@@ -313,6 +314,33 @@ def run_nomad_bench(
         notes="NOMAD run with RunLogger"
     )
 
+    # Initialize task metrics accumulation
+    total_tokens = 0
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_latency_sec = 0.0
+    total_api_cost = 0.0
+
+    # Pricing per million tokens
+    MODEL_PRICING = {
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        "gpt-4": {"input": 30.0, "output": 60.0},
+        "gpt-5": {"input": 50.0, "output": 100.0},  # Assuming GPT-5 pricing
+    }
+
+    def accumulate_metrics(metrics: Optional[Dict[str, Any]]) -> None:
+        nonlocal total_tokens, total_input_tokens, total_output_tokens, total_latency_sec, total_api_cost
+        if metrics:
+            total_tokens += metrics.get('total_tokens', 0)
+            total_input_tokens += metrics.get('input_tokens', 0)
+            total_output_tokens += metrics.get('output_tokens', 0)
+            total_latency_sec += metrics.get('latency_sec', 0.0)
+            # Calculate cost based on model
+            model = metrics.get('model', 'gpt-4o-mini')
+            pricing = MODEL_PRICING.get(model, MODEL_PRICING['gpt-4o-mini'])
+            cost = (total_input_tokens * pricing['input'] + total_output_tokens * pricing['output']) / 1_000_000
+            total_api_cost = cost
+
     run_base_id = logger.run_id
 
     print("===> Baseline run (NOMAD)")
@@ -378,6 +406,7 @@ def run_nomad_bench(
                 iteration_idx=step,
             )
             agent_metrics = agent_result.metrics
+            accumulate_metrics(agent_metrics)
             proposal = _sanitize_proposal(agent_result.structured_output.get("proposal", {}))
             clarifications = agent_result.iteration_entry.get("clarifying_questions", [])
             if not proposal:
@@ -397,6 +426,7 @@ def run_nomad_bench(
                 if not proposal:
                     proposal = _fallback_config(model_config, step)
                 agent_metrics = llm_usage
+                accumulate_metrics(agent_metrics)
         else:
             proposal, llm_usage = _propose_config(
                 model_config,
@@ -410,6 +440,7 @@ def run_nomad_bench(
                 proposal = _fallback_config(model_config, step)
                 proposal_source = "heuristic"
             agent_metrics = llm_usage
+            accumulate_metrics(agent_metrics)
 
         if proposal_source.startswith("agent") and not proposal:
             proposal = _fallback_config(model_config, step)
@@ -517,6 +548,11 @@ def run_nomad_bench(
         "num_steps": num_steps,
         "history": history,
         "context_summary": context_summary or {},
+        "task_metrics": {
+            "total_tokens": total_tokens,
+            "total_api_cost": total_api_cost,
+            "total_latency_sec": total_latency_sec,
+        },
     }
     print("\n===> Final NOMAD summary")
     print(json.dumps(final, indent=2))
@@ -526,6 +562,9 @@ def run_nomad_bench(
         final_metric=last_results.get("metric_value"),
         best_step_idx=step,
         n_steps=num_steps,
+        total_tokens=total_tokens,
+        total_api_cost=total_api_cost,
+        total_latency_sec=total_latency_sec,
     )
     return final
 
