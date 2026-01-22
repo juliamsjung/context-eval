@@ -92,19 +92,29 @@ class RunLogger:
         final_metric: float | None,
         best_step_idx: int | None,
         n_steps: int,
+        total_tokens: int | None = None,
+        total_api_cost: float | None = None,
+        total_latency_sec: float | None = None,
     ) -> None:
         """
         Log the end of a run. This should be called exactly once per run.
         """
+        details = {
+            "status": status,  # e.g. 'success', 'error', 'timeout'
+            "final_metric": final_metric,
+            "best_step_idx": best_step_idx,
+            "n_steps": n_steps,
+        }
+        if total_tokens is not None:
+            details["total_tokens"] = total_tokens
+        if total_api_cost is not None:
+            details["total_api_cost"] = total_api_cost
+        if total_latency_sec is not None:
+            details["total_latency_sec"] = total_latency_sec
         self._write(
             event_type="run.end",
             step_idx=best_step_idx,
-            details={
-                "status": status,  # e.g. 'success', 'error', 'timeout'
-                "final_metric": final_metric,
-                "best_step_idx": best_step_idx,
-                "n_steps": n_steps,
-            },
+            details=details,
         )
 
     def log_op(self, event_type: str, step_idx: int, details: dict[str, Any]) -> None:
