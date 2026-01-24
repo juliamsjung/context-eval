@@ -11,6 +11,15 @@ import hashlib
 from src.utils.logging import RunLogger, start_run
 
 
+# Model pricing per million tokens (as of Jan 2025)
+MODEL_PRICING = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+}
+DEFAULT_MODEL = "gpt-4o-mini"
+
+
 @dataclass
 class BenchmarkConfig:
     """Configuration for a benchmark run."""
@@ -102,6 +111,33 @@ class BaseBenchmark(ABC):
             run_id=run_id,
         )
         return self.logger
+
+    def _compute_run_totals(self) -> Dict[str, Any]:
+        """Compute aggregate token/cost/latency metrics from history."""
+        total_input = 0
+        total_output = 0
+        total_latency = 0.0
+
+        for result in self.history:
+            if result.token_usage:
+                total_input += result.token_usage.get("input_tokens", 0)
+                total_output += result.token_usage.get("output_tokens", 0)
+                total_latency += result.token_usage.get("latency_sec", 0.0)
+
+        total_tokens = total_input + total_output
+
+        # Calculate cost (use model from config or default)
+        model = self.project_config.get("model", DEFAULT_MODEL)
+        pricing = MODEL_PRICING.get(model, MODEL_PRICING[DEFAULT_MODEL])
+        total_cost = (total_input * pricing["input"] + total_output * pricing["output"]) / 1_000_000
+
+        return {
+            "total_tokens": total_tokens,
+            "total_input_tokens": total_input,
+            "total_output_tokens": total_output,
+            "total_latency_sec": total_latency,
+            "total_api_cost": round(total_cost, 6),
+        }
 
     def run(self, run_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -195,11 +231,14 @@ class BaseBenchmark(ABC):
             print(f"Result: {json.dumps(metrics, indent=2)}")
 
         # Finalize
+        run_totals = self._compute_run_totals()
+
         final_result = {
             "history": [self._result_to_dict(r) for r in self.history],
             "final_config": current_config,
             "final_metrics": self.history[-1].metrics,
             "total_steps": len(self.history),
+            "task_metrics": run_totals,
         }
 
         self.logger.log_run_end(
@@ -207,6 +246,9 @@ class BaseBenchmark(ABC):
             final_metric=list(self.history[-1].metrics.values())[0] if self.history[-1].metrics else None,
             best_step_idx=len(self.history) - 1,
             n_steps=self.config.num_steps,
+            total_tokens=run_totals["total_tokens"],
+            total_api_cost=run_totals["total_api_cost"],
+            total_latency_sec=run_totals["total_latency_sec"],
             details=final_result,
         )
 
