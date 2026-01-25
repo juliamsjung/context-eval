@@ -8,7 +8,7 @@ from src.agent.policies import (
 )
 from src.agent.runner import AgentRunner, AgentRunResult
 from src.agent.run_logging import AgentRunLogger
-from src.agent.tools import Tool, ToolResult, build_nomad_tools, build_toy_tools
+from src.agent.tools import Tool, ToolResult, build_tools, build_nomad_tools, build_toy_tools
 
 __all__ = [
     "AgentRunLogger",
@@ -20,6 +20,7 @@ __all__ = [
     "LongContextPolicy",
     "Tool",
     "ToolResult",
+    "build_tools",
     "build_nomad_tools",
     "build_toy_tools",
     "create_policy",

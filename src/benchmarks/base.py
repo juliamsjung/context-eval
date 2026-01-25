@@ -3,11 +3,23 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import hashlib
 
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    OpenAI = None  # type: ignore
+    OPENAI_AVAILABLE = False
+
+from src.utils.config import get_env_var
 from src.utils.logging import RunLogger, start_run
 
 
@@ -20,6 +32,52 @@ MODEL_PRICING = {
 DEFAULT_MODEL = "gpt-4o-mini"
 
 
+def _clamp(value: float, bounds: tuple[float, float]) -> float:
+    """Clamp a value to the given bounds."""
+    low, high = bounds
+    return max(low, min(high, value))
+
+
+class BaseEnv(ABC):
+    """Abstract base class for benchmark environments."""
+
+    def __init__(self, workspace: Path | None = None):
+        self.workspace = workspace or self._get_default_workspace()
+        self.workspace.mkdir(parents=True, exist_ok=True)
+        self.base_config_path = self.workspace / "config.json"
+        self.config_path = self.workspace / "run_config.json"
+        self.results_path = self.workspace / "results.json"
+        self.train_script = self.workspace / "train.py"
+        self._init_config()
+
+    @abstractmethod
+    def _get_default_workspace(self) -> Path:
+        """Return the default workspace path for this environment."""
+        ...
+
+    def _init_config(self) -> None:
+        """Initialize run_config.json from base config if it doesn't exist."""
+        if not self.config_path.exists() and self.base_config_path.exists():
+            self.config_path.write_text(self.base_config_path.read_text())
+
+    def read_config(self) -> Dict[str, Any]:
+        """Read the current run configuration."""
+        return json.loads(self.config_path.read_text())
+
+    def write_config(self, cfg: Dict[str, Any]) -> None:
+        """Write a new run configuration."""
+        self.config_path.write_text(json.dumps(cfg, indent=2))
+
+    def run_train(self) -> Dict[str, Any]:
+        """Execute the training script and return results."""
+        subprocess.run(
+            [sys.executable, str(self.train_script)],
+            cwd=self.workspace,
+            check=True,
+        )
+        return json.loads(self.results_path.read_text())
+
+
 @dataclass
 class BenchmarkConfig:
     """Configuration for a benchmark run."""
@@ -28,7 +86,6 @@ class BenchmarkConfig:
     reasoning_mode: str = "controller"
     history_window: int = 5
     seed: int = 0
-    extra: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -49,6 +106,8 @@ class BaseBenchmark(ABC):
         self.project_config = project_config or {}
         self.history: List[IterationResult] = []
         self.logger: Optional[RunLogger] = None
+        self.agent_runner = None
+        self.policy_obj = None
 
     @property
     @abstractmethod
@@ -79,20 +138,6 @@ class BaseBenchmark(ABC):
         ...
 
     @abstractmethod
-    def propose_config(
-        self,
-        current_config: Dict[str, Any],
-        last_metrics: Dict[str, float],
-        history: List[IterationResult],
-    ) -> tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, int]]]:
-        """
-        Propose next config. Returns (proposal, source, token_usage).
-        source is one of: "llm", "agent", "heuristic"
-        Returns (None, "heuristic", None) if LLM fails, then call fallback_config.
-        """
-        ...
-
-    @abstractmethod
     def fallback_config(self, current_config: Dict[str, Any], step: int) -> Dict[str, Any]:
         """Generate fallback config when LLM/agent fails."""
         ...
@@ -101,6 +146,186 @@ class BaseBenchmark(ABC):
     def sanitize_config(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and clamp proposed config to valid bounds."""
         ...
+
+    # Abstract hooks for subclass customization
+    @abstractmethod
+    def _build_agent_tools(self) -> Any:
+        """Build tools for the agent. Return value passed to AgentRunner."""
+        ...
+
+    @abstractmethod
+    def _get_agent_config_defaults(self) -> Dict[str, str]:
+        """Return default dataset_id and agent_id for agent config."""
+        ...
+
+    @abstractmethod
+    def _build_agent_state(self, history: List[IterationResult]) -> Dict[str, Any]:
+        """Build the state dict to pass to the agent."""
+        ...
+
+    @abstractmethod
+    def _build_agent_task_input(self, step: int, last_metrics: Dict[str, float]) -> str:
+        """Build the task input string for the agent."""
+        ...
+
+    @abstractmethod
+    def _get_llm_system_prompt(self) -> str:
+        """Return the system prompt for direct LLM calls."""
+        ...
+
+    @abstractmethod
+    def _build_llm_user_prompt(
+        self,
+        current_config: Dict[str, Any],
+        last_metrics: Dict[str, float],
+        history: List[IterationResult],
+    ) -> str:
+        """Build the user prompt for direct LLM calls."""
+        ...
+
+    def _setup_agent_if_needed(self) -> None:
+        """Initialize AgentRunner if reasoning_mode is 'agentic'."""
+        if self.config.reasoning_mode != "agentic":
+            return
+
+        from src.agent import AgentRunner, create_policy
+
+        context_policies = self.project_config.get("context_policies", {})
+        policy_overrides = context_policies.get(self.config.policy_type, {})
+        self.policy_obj = create_policy(self.config.policy_type, policy_overrides)
+
+        agent_cfg = self.project_config.get("agentic", {})
+        defaults = self._get_agent_config_defaults()
+        agent_cfg.setdefault("dataset_id", defaults.get("dataset_id", self.dataset_id))
+        agent_cfg.setdefault("agent_id", defaults.get("agent_id", self.project_config.get("project_name", "agent")))
+
+        tools = self._build_agent_tools()
+        self.agent_runner = AgentRunner(
+            policy=self.policy_obj,
+            tools=tools,
+            logger=None,
+            config=agent_cfg,
+        )
+
+    def propose_config(
+        self,
+        current_config: Dict[str, Any],
+        last_metrics: Dict[str, float],
+        history: List[IterationResult],
+    ) -> tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, int]]]:
+        """Propose config using agent (agentic) or direct LLM (controller)."""
+        step = len(history)
+
+        if self.config.reasoning_mode == "agentic" and self.agent_runner:
+            return self._agent_propose(current_config, last_metrics, history, step)
+
+        # Controller mode: direct LLM call
+        return self._llm_propose(current_config, last_metrics, history)
+
+    def _agent_propose(
+        self,
+        current_config: Dict[str, Any],
+        last_metrics: Dict[str, float],
+        history: List[IterationResult],
+        step: int,
+    ) -> tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, int]]]:
+        """Use ReAct-style agent to propose config."""
+        agent_state = self._build_agent_state(history)
+        task_input = self._build_agent_task_input(step, last_metrics)
+
+        agent_result = self.agent_runner.run(
+            task_input=task_input,
+            state=agent_state,
+            run_id=self.logger.run_id if self.logger else "unknown",
+            task_id=self.benchmark_name,
+            reasoning_mode=self.config.reasoning_mode,
+            iteration_idx=step,
+        )
+
+        # Extract proposal from agent output
+        proposal = self._extract_proposal_from_agent(agent_result)
+        if proposal:
+            source = f"agent:{self.policy_obj.name if self.policy_obj else self.config.policy_type}"
+            return proposal, source, agent_result.token_usage
+
+        # Fall back to LLM if agent didn't produce proposal
+        proposal, usage = self._direct_llm_propose(current_config, last_metrics, history)
+        if proposal:
+            return proposal, "agent_fallback_llm", usage
+
+        return None, "heuristic", None
+
+    def _extract_proposal_from_agent(self, agent_result) -> Optional[Dict[str, Any]]:
+        """Extract and sanitize proposal from agent result."""
+        structured = agent_result.structured_output
+        if "proposal" in structured and isinstance(structured["proposal"], dict):
+            return self.sanitize_config(structured["proposal"])
+
+        # Try parsing final answer
+        answer = agent_result.final_answer
+        if answer:
+            parsed = safe_parse_json(answer)
+            if parsed:
+                if "proposal" in parsed:
+                    return self.sanitize_config(parsed["proposal"])
+                return self.sanitize_config(parsed)
+        return None
+
+    def _llm_propose(
+        self,
+        current_config: Dict[str, Any],
+        last_metrics: Dict[str, float],
+        history: List[IterationResult],
+    ) -> tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, int]]]:
+        """Controller mode: direct LLM call."""
+        proposal, usage = self._direct_llm_propose(current_config, last_metrics, history)
+        if proposal:
+            return proposal, "llm", usage
+        return None, "heuristic", None
+
+    def _direct_llm_propose(
+        self,
+        current_config: Dict[str, Any],
+        last_metrics: Dict[str, float],
+        history: List[IterationResult],
+    ) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """Make direct LLM call to propose config."""
+        if not OPENAI_AVAILABLE:
+            return None, None
+
+        api_key = get_env_var("OPENAI_API_KEY")
+        if not api_key:
+            return None, None
+
+        system_prompt = self._get_llm_system_prompt()
+        user_prompt = self._build_llm_user_prompt(current_config, last_metrics, history)
+
+        client = OpenAI(api_key=api_key)
+        t0 = datetime.utcnow().timestamp()
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.2,
+            max_tokens=250,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        latency = datetime.utcnow().timestamp() - t0
+        content = resp.choices[0].message.content or ""
+        usage = {
+            "input_tokens": resp.usage.prompt_tokens,
+            "output_tokens": resp.usage.completion_tokens,
+            "total_tokens": resp.usage.total_tokens,
+            "latency_sec": latency,
+        }
+
+        parsed = safe_parse_json(content)
+        if not parsed:
+            return None, usage
+
+        sanitized = self.sanitize_config(parsed)
+        return sanitized or None, usage
 
     def setup_logger(self, run_id: Optional[str] = None) -> RunLogger:
         """Initialize the run logger."""

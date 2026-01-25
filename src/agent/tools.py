@@ -21,6 +21,20 @@ class Tool:
         return self.handler(action_input, state)
 
 
+# Tool description constants
+NOMAD_TOOL_DESCRIPTIONS = {
+    "retrieve_docs": "Fetches focused snippets from the NOMAD dataset context.",
+    "summarize_chunks": "Summarizes provided text to highlight the most important signals.",
+    "ask_clarifying_question": "Asks for missing task details; returns stored defaults when available.",
+}
+
+TOY_TOOL_DESCRIPTIONS = {
+    "retrieve_docs": "Fetches context about the Toy benchmark task and parameters.",
+    "summarize_chunks": "Summarizes text to highlight important information.",
+    "ask_clarifying_question": "Asks for clarification about the task.",
+}
+
+
 def _serialize_context_chunks(context_summary: Dict[str, Any]) -> List[str]:
     chunks: List[str] = []
     for key, value in context_summary.items():
@@ -35,16 +49,10 @@ def _serialize_context_chunks(context_summary: Dict[str, Any]) -> List[str]:
     return chunks
 
 
-def build_nomad_tools(
-    *,
-    context_summary: Dict[str, Any],
-    retrieval_config: Dict[str, Any],
-    clarifier_defaults: Optional[Dict[str, str]] = None,
-) -> Dict[str, Tool]:
-    """Create a toolset tailored for the NOMAD benchmark."""
-
-    chunks = _serialize_context_chunks(context_summary)
-    clarifier_defaults = clarifier_defaults or {}
+def _create_retrieve_handler(
+    chunks: List[str], retrieval_config: Dict[str, Any]
+) -> Callable[[Dict[str, Any], Dict[str, Any]], ToolResult]:
+    """Create retrieve_docs handler with given chunks and config."""
 
     def _retrieve_docs(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
         k = int(action_input.get("k") or retrieval_config.get("max_retrieved_chunks", 3))
@@ -55,69 +63,13 @@ def build_nomad_tools(
             metadata={"chunks_returned": k},
         )
 
-    def _summarize(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
-        text = action_input.get("text") or ""
-        limit = retrieval_config.get("summary_char_limit", 400)
-        summary = text.strip().split("\n")
-        summary_text = " ".join(line.strip() for line in summary)[:limit]
-        return ToolResult(
-            content=summary_text,
-            metadata={"original_length": len(text), "summary_length": len(summary_text)},
-        )
-
-    def _clarify(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
-        question = (action_input.get("question") or "").strip()
-        answer = clarifier_defaults.get(question.lower())
-        if not answer:
-            # Try to infer answer from state hints
-            hint_fields = state.get("clarification_hints", {})
-            answer = hint_fields.get(question.lower(), "No additional information available.")
-        return ToolResult(
-            content=answer,
-            metadata={"question": question, "auto_answered": True},
-        )
-
-    return {
-        "retrieve_docs": Tool(
-            name="retrieve_docs",
-            description="Fetches focused snippets from the NOMAD dataset context.",
-            handler=_retrieve_docs,
-        ),
-        "summarize_chunks": Tool(
-            name="summarize_chunks",
-            description="Summarizes provided text to highlight the most important signals.",
-            handler=_summarize,
-        ),
-        "ask_clarifying_question": Tool(
-            name="ask_clarifying_question",
-            description="Asks for missing task details; returns stored defaults when available.",
-            handler=_clarify,
-        ),
-    }
+    return _retrieve_docs
 
 
-def build_toy_tools(
-    *,
-    context_summary: Dict[str, Any],
-    retrieval_config: Dict[str, Any],
-    clarifier_defaults: Optional[Dict[str, str]] = None,
-) -> Dict[str, Tool]:
-    """Create toolset for Toy benchmark (simpler than NOMAD)."""
-
-    chunks = _serialize_context_chunks(context_summary)
-    clarifier_defaults = clarifier_defaults or {
-        "what metric should i optimize?": "Accuracy - higher is better.",
-        "what are the parameter bounds?": "C: 0.01-100.0, max_iter: 10-1000",
-    }
-
-    def _retrieve_docs(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
-        k = int(action_input.get("k") or retrieval_config.get("max_retrieved_chunks", 3))
-        k = max(1, min(k, len(chunks)))
-        snippet = "\n".join(chunks[:k])
-        return ToolResult(
-            content=snippet[: retrieval_config.get("chunk_char_limit", 600)],
-            metadata={"chunks_returned": k},
-        )
+def _create_summarize_handler(
+    retrieval_config: Dict[str, Any]
+) -> Callable[[Dict[str, Any], Dict[str, Any]], ToolResult]:
+    """Create summarize handler with given config."""
 
     def _summarize(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
         text = action_input.get("text") or ""
@@ -128,31 +80,106 @@ def build_toy_tools(
             metadata={"original_length": len(text), "summary_length": len(summary_text)},
         )
 
+    return _summarize
+
+
+def _create_clarify_handler(
+    clarifier_defaults: Dict[str, str], normalize_questions: bool
+) -> Callable[[Dict[str, Any], Dict[str, Any]], ToolResult]:
+    """Create clarify handler with defaults and normalization setting."""
+
     def _clarify(action_input: Dict[str, Any], state: Dict[str, Any]) -> ToolResult:
-        question = (action_input.get("question") or "").strip().lower()
-        answer = clarifier_defaults.get(question)
+        question = (action_input.get("question") or "").strip()
+        lookup_key = question.lower()
+        answer = clarifier_defaults.get(lookup_key)
         if not answer:
             hint_fields = state.get("clarification_hints", {})
-            answer = hint_fields.get(question, "No additional information available.")
+            answer = hint_fields.get(lookup_key, "No additional information available.")
+        # Store normalized or original question based on setting
+        stored_question = lookup_key if normalize_questions else question
         return ToolResult(
             content=answer,
-            metadata={"question": question, "auto_answered": True},
+            metadata={"question": stored_question, "auto_answered": True},
         )
+
+    return _clarify
+
+
+def build_tools(
+    *,
+    context_summary: Dict[str, Any],
+    retrieval_config: Dict[str, Any],
+    clarifier_defaults: Optional[Dict[str, str]] = None,
+    tool_descriptions: Optional[Dict[str, str]] = None,
+    normalize_questions: bool = True,
+) -> Dict[str, Tool]:
+    """Generic tool factory for all benchmarks.
+
+    Args:
+        context_summary: Dataset/task context to serialize into chunks.
+        retrieval_config: Config with max_retrieved_chunks, chunk_char_limit, etc.
+        clarifier_defaults: Default answers for clarifying questions.
+        tool_descriptions: Override default tool descriptions per benchmark.
+        normalize_questions: Whether to lowercase questions in clarify metadata.
+
+    Returns:
+        Dictionary of tool name to Tool instance.
+    """
+    chunks = _serialize_context_chunks(context_summary)
+    clarifier_defaults = clarifier_defaults or {}
+    descriptions = tool_descriptions or {}
 
     return {
         "retrieve_docs": Tool(
             name="retrieve_docs",
-            description="Fetches context about the Toy benchmark task and parameters.",
-            handler=_retrieve_docs,
+            description=descriptions.get("retrieve_docs", "Retrieves relevant documentation chunks."),
+            handler=_create_retrieve_handler(chunks, retrieval_config),
         ),
         "summarize_chunks": Tool(
             name="summarize_chunks",
-            description="Summarizes text to highlight important information.",
-            handler=_summarize,
+            description=descriptions.get("summarize_chunks", "Summarizes provided text."),
+            handler=_create_summarize_handler(retrieval_config),
         ),
         "ask_clarifying_question": Tool(
             name="ask_clarifying_question",
-            description="Asks for clarification about the task.",
-            handler=_clarify,
+            description=descriptions.get("ask_clarifying_question", "Asks for clarification."),
+            handler=_create_clarify_handler(clarifier_defaults, normalize_questions),
         ),
     }
+
+
+# Backward-compatible wrapper functions
+def build_nomad_tools(
+    *,
+    context_summary: Dict[str, Any],
+    retrieval_config: Dict[str, Any],
+    clarifier_defaults: Optional[Dict[str, str]] = None,
+) -> Dict[str, Tool]:
+    """Build NOMAD-specific tools. Wrapper around build_tools()."""
+    return build_tools(
+        context_summary=context_summary,
+        retrieval_config=retrieval_config,
+        clarifier_defaults=clarifier_defaults,
+        tool_descriptions=NOMAD_TOOL_DESCRIPTIONS,
+        normalize_questions=False,
+    )
+
+
+def build_toy_tools(
+    *,
+    context_summary: Dict[str, Any],
+    retrieval_config: Dict[str, Any],
+    clarifier_defaults: Optional[Dict[str, str]] = None,
+) -> Dict[str, Tool]:
+    """Build Toy-specific tools. Wrapper around build_tools()."""
+    defaults = clarifier_defaults or {
+        "what metric should i optimize?": "Accuracy - higher is better.",
+        "what are the parameter bounds?": "C: 0.01-100.0, max_iter: 10-1000",
+    }
+    return build_tools(
+        context_summary=context_summary,
+        retrieval_config=retrieval_config,
+        clarifier_defaults=defaults,
+        tool_descriptions=TOY_TOOL_DESCRIPTIONS,
+        normalize_questions=True,
+    )

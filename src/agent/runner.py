@@ -8,7 +8,6 @@ from datetime import datetime
 import json
 import time
 import textwrap
-import hashlib
 
 try:
     from openai import OpenAI
@@ -360,24 +359,6 @@ def _accumulate_usage(total: Dict[str, int], usage: Dict[str, int]) -> Dict[str,
     for key in ("input_tokens", "output_tokens", "total_tokens"):
         total[key] = total.get(key, 0) + usage.get(key, 0)
     return total
-
-
-def _truncate_text(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    return text[: limit - 3] + "..."
-
-
-def _truncate_json(obj: Any, limit: int) -> str:
-    try:
-        text = json.dumps(obj)
-    except Exception:
-        text = str(obj)
-    return _truncate_text(text, limit)
-
-
-def _hash_text(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
 def _build_iteration_entry(

@@ -53,6 +53,7 @@ Edit `config.json` to adjust:
 | `--reasoning-mode` | `agentic` / `controller` |
 | `--seed` | Random seed |
 | `--run-id` | Custom run identifier |
+| `--output-dir` | Custom output directory for traces |
 
 ## Project Structure
 
@@ -63,7 +64,7 @@ src/
 │   ├── base.py
 │   ├── nomad/      # NOMAD benchmark
 │   └── toy/        # Toy benchmark
-└── utils/          # Config, logging
+└── utils/          # Config, logging, CLI utilities
 
 traces/             # Output JSONL traces
 ```
