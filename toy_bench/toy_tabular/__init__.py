@@ -1,3 +1,0 @@
-"""Toy tabular benchmark package."""
-
-

@@ -1,3 +1,4 @@
+"""Agent run logging utilities."""
 from __future__ import annotations
 
 import json
@@ -74,4 +75,3 @@ class AgentRunLogger:
         }
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\n")
-

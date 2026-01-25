@@ -1,2 +1,0 @@
-"""NOMAD Kaggle benchmark package."""
-

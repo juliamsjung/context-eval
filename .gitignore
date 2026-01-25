@@ -14,8 +14,8 @@ traces/
 *.jsonl
 
 # json files for results and plots
-toy_bench/toy_tabular/workspace/all_results.json
-toy_bench/toy_tabular/workspace/plots/
+src/benchmarks/toy/workspace/all_results.json
+src/benchmarks/toy/workspace/plots/
 
 # Environment variables (keep secrets local)
 .env
@@ -47,20 +47,24 @@ htmlcov/
 logs/
 
 # Toy bench artifacts
-toy_bench/toy_tabular/workspace/run_config.json
-toy_bench/toy_tabular/workspace/data.npy
-toy_bench/toy_tabular/workspace/labels.npy
-toy_bench/toy_tabular/workspace/results.json
+src/benchmarks/toy/workspace/run_config.json
+src/benchmarks/toy/workspace/data.npy
+src/benchmarks/toy/workspace/labels.npy
+src/benchmarks/toy/workspace/results.json
 
 # Kaggle NOMAD data (downloaded locally)
 kaggle-data/nomad/raw/
 kaggle-data/nomad/processed/
 
 # NOMAD bench artifacts
-benchmarks/nomad/workspace/run_config.json
-benchmarks/nomad/workspace/features.npy
-benchmarks/nomad/workspace/targets.npy
-benchmarks/nomad/workspace/dataset_context.json
-benchmarks/nomad/workspace/prepared_meta.json
-benchmarks/nomad/workspace/results.json
+src/benchmarks/nomad/workspace/run_config.json
+src/benchmarks/nomad/workspace/features.npy
+src/benchmarks/nomad/workspace/targets.npy
+src/benchmarks/nomad/workspace/dataset_context.json
+src/benchmarks/nomad/workspace/prepared_meta.json
+src/benchmarks/nomad/workspace/results.json
+
+# New directories for experiment outputs
+outputs/
+data/
 

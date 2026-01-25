@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 WORKSPACE = Path(__file__).resolve().parent
 DATA_PATH = WORKSPACE / "data.npy"
 LABELS_PATH = WORKSPACE / "labels.npy"
-CONFIG_PATH = WORKSPACE / "config.json"
+CONFIG_PATH = WORKSPACE / "run_config.json"
 RESULTS_PATH = WORKSPACE / "results.json"
 ALL_RESULTS_PATH = WORKSPACE / "all_results.json"
 
