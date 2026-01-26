@@ -91,7 +91,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir",
-        default="benchmarks/nomad/workspace",
+        default="src/benchmarks/nomad/workspace",
         help="Directory to store workspace-ready artifacts",
     )
     parser.add_argument(
