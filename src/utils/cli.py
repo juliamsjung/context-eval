@@ -36,6 +36,11 @@ def parse_benchmark_args(
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducibility.")
     parser.add_argument("--output-dir", type=str, help="Custom output directory for traces.")
     parser.add_argument("--run-id", type=str, help="Custom run ID for batch tracking.")
+
+    # Context visibility flags
+    parser.add_argument("--show-task", action="store_true", help="Include task description in prompt.")
+    parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")
+    parser.add_argument("--history-window", type=int, help="Number of history entries to show (0=none).")
     
     # Add benchmark-specific arguments if provided
     if extra_args:

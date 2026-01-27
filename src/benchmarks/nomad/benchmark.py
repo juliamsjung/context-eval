@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
@@ -39,6 +40,10 @@ class NomadBenchmark(BaseBenchmark):
     @property
     def agent_id(self) -> str:
         return "nomad_llm"
+
+    @property
+    def workspace_path(self) -> Path:
+        return Path(__file__).resolve().parent / "workspace"
 
     def get_default_config(self) -> Dict[str, Any]:
         return self.env.read_config()
@@ -114,27 +119,17 @@ class NomadBenchmark(BaseBenchmark):
         last_metrics: Dict[str, float],
         history: List[IterationResult],
     ) -> str:
-        history_payload = [
-            {
-                "step": entry.step,
-                "config": entry.config,
-                "score": self._get_primary_score(entry.metrics),
-            }
-            for entry in history[-self.config.history_window:]
-        ]
+        # Filter config to only tunable params
+        filtered_config = {k: current_config.get(k) for k in PARAM_BOUNDS.keys() if k in current_config}
 
-        prompt_payload = {
-            "current_config": {k: current_config.get(k) for k in PARAM_BOUNDS.keys() if k in current_config},
-            "latest_score": self._get_primary_score(last_metrics),
-            "recent_history": history_payload,
-        }
-        # dataset_context removed - will be reintroduced via explicit visibility flags
+        # Use shared context bundle builder
+        bundle = self._build_context_bundle(filtered_config, last_metrics, history)
 
         return (
-            "You are tuning a HistGradientBoostingRegressor for a regression task. "
+            "You are tuning a HistGradientBoostingRegressor."
             "Use the structured information below to recommend "
             "a new configuration that improves the score.\n"
-            f"{json.dumps(prompt_payload, indent=2)}\n\n"
+            f"{json.dumps(bundle, indent=2)}\n\n"
             "Return JSON with numeric keys among "
             f"{list(PARAM_BOUNDS.keys())}. Keep values within reasonable ranges."
         )
@@ -144,6 +139,8 @@ def run_nomad_bench(
     num_steps: int = 3,
     *,
     history_window: int = DEFAULT_HISTORY_WINDOW,
+    show_task: bool = False,
+    show_metric: bool = False,
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
@@ -153,6 +150,8 @@ def run_nomad_bench(
         num_steps=num_steps,
         history_window=history_window,
         seed=seed,
+        show_task=show_task,
+        show_metric=show_metric,
     )
     benchmark = NomadBenchmark(bench_config, config or {})
     return benchmark.run(run_id=run_id)
