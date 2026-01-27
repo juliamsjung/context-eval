@@ -16,8 +16,6 @@ def main() -> None:
 
     results = run_toy_tabular(
         num_steps=args.num_steps,
-        policy_type=args.policy_type,
-        reasoning_mode=args.reasoning_mode,
         config=cfg,
         seed=args.seed,
         run_id=args.run_id,

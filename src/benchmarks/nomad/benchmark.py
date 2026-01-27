@@ -27,7 +27,6 @@ class NomadBenchmark(BaseBenchmark):
         super().__init__(config, project_config)
         self.env = NomadEnv()
         self.context_summary = self.env.read_context()
-        self._setup_agent_if_needed()
 
     @property
     def benchmark_name(self) -> str:
@@ -39,7 +38,7 @@ class NomadBenchmark(BaseBenchmark):
 
     @property
     def agent_id(self) -> str:
-        return f"nomad_{self.config.reasoning_mode}_{self.config.policy_type}"
+        return "nomad_llm"
 
     def get_default_config(self) -> Dict[str, Any]:
         return self.env.read_config()
@@ -102,50 +101,6 @@ class NomadBenchmark(BaseBenchmark):
                 continue
         return sanitized
 
-    # Abstract hook implementations
-    def _build_agent_tools(self) -> Any:
-        """Build tools for the NOMAD benchmark agent."""
-        from src.agent import build_nomad_tools
-
-        agent_cfg = self.project_config.get("agentic", {})
-        return build_nomad_tools(
-            context_summary=self.context_summary,
-            retrieval_config=self.policy_obj.config,
-            clarifier_defaults=agent_cfg.get("clarifier_defaults"),
-        )
-
-    def _get_agent_config_defaults(self) -> Dict[str, str]:
-        return {
-            "dataset_id": "nomad",
-            "agent_id": self.project_config.get("project_name", "nomad_agent"),
-        }
-
-    def _build_agent_state(self, history: List[IterationResult]) -> Dict[str, Any]:
-        history_dicts = [
-            {
-                "step": r.step,
-                "config": r.config,
-                "metrics": r.metrics,
-                "proposal_source": r.proposal_source,
-            }
-            for r in history
-        ]
-        return {
-            "context_excerpt": json.dumps(self.context_summary, sort_keys=True)[:2000],
-            "history": history_dicts[-self.config.history_window:],
-            "clarification_hints": {
-                "target metric": "mae",
-                "dataset": "nomad",
-            },
-        }
-
-    def _build_agent_task_input(self, step: int, last_metrics: Dict[str, float]) -> str:
-        return (
-            f"Iteration {step}/{self.config.num_steps}: improve HistGradientBoostingRegressor "
-            f"for the NOMAD benchmark. Current metric MAE={last_metrics.get('mae', 'N/A')}. "
-            f"Propose new hyperparameters."
-        )
-
     def _get_llm_system_prompt(self) -> str:
         return "You are an ML assistant optimizing gradient boosting hyperparameters."
 
@@ -186,8 +141,6 @@ def run_nomad_bench(
     num_steps: int = 3,
     *,
     history_window: int = DEFAULT_HISTORY_WINDOW,
-    policy_type: str = "short_context",
-    reasoning_mode: str = "controller",
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
@@ -195,8 +148,6 @@ def run_nomad_bench(
     """Run NOMAD benchmark. Thin wrapper around NomadBenchmark."""
     bench_config = BenchmarkConfig(
         num_steps=num_steps,
-        policy_type=policy_type,
-        reasoning_mode=reasoning_mode,
         history_window=history_window,
         seed=seed,
     )

@@ -3,8 +3,6 @@
   "model": "gpt-4o-mini",
   "temperature": 0.0,
   "max_output_tokens": 256,
-  "policy_type": "short_context",
-  "reasoning_mode": "controller",
   "context_policies": {
     "short_context": {
       "max_retrieved_chunks": 3,
@@ -16,13 +14,6 @@
       "chunk_char_limit": 1200,
       "summary_char_limit": 800
     }
-  },
-  "agentic": {
-    "max_steps": 4,
-    "model": "gpt-4o-mini",
-    "temperature": 0.1,
-    "max_tokens": 350,
-    "result_schema": "Return JSON with keys 'answer' and 'proposal'. The proposal must be a JSON object containing numeric hyperparameters."
   },
   "nomad_bench": {
     "num_steps": 3,

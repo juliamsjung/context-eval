@@ -30,8 +30,6 @@ def main() -> None:
     results = run_nomad_bench(
         num_steps=args.num_steps,
         history_window=history_window,
-        policy_type=args.policy_type,
-        reasoning_mode=args.reasoning_mode,
         config=cfg,
         seed=args.seed,
         run_id=args.run_id,
