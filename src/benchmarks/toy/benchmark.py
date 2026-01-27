@@ -62,6 +62,10 @@ class ToyTabularBenchmark(BaseBenchmark):
                 pass
         return sanitized
 
+    def _get_primary_score(self, metrics: Dict[str, float]) -> float:
+        """Extract primary score for agent feedback."""
+        return metrics.get("accuracy", 0.0)
+
     def _get_llm_system_prompt(self) -> str:
         return "You propose new logistic regression hyperparameters based on past evaluations."
 
@@ -72,7 +76,7 @@ class ToyTabularBenchmark(BaseBenchmark):
         history: List[IterationResult],
     ) -> str:
         history_lines = "\n".join(
-            f"- step {entry.step}: accuracy={entry.metrics.get('accuracy', 0):.4f}, "
+            f"- step {entry.step}: score={self._get_primary_score(entry.metrics):.4f}, "
             f"C={entry.config.get('C')}, max_iter={entry.config.get('max_iter')}"
             for entry in history
         )
@@ -82,7 +86,7 @@ class ToyTabularBenchmark(BaseBenchmark):
         return (
             "You are adjusting hyperparameters for logistic regression on a fixed synthetic dataset.\n"
             f"Current config:\n{json.dumps({'C': current_config.get('C'), 'max_iter': current_config.get('max_iter')}, indent=2)}\n\n"
-            f"Latest metrics:\n{json.dumps(last_metrics, indent=2)}\n\n"
+            f"Latest score: {self._get_primary_score(last_metrics):.4f}\n\n"
             f"History:\n{history_lines}\n\n"
             "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
         )

@@ -74,8 +74,8 @@ def main() -> None:
         "rmse": rmse,
         "r2": float(r2_score(y_test, preds)),
     }
-    metric_name = cfg.get("metric", "mae")
-    metric_value = metrics.get(metric_name, metrics["mae"])
+    metric_name = "mae"  # Environment-level constant, not from config
+    metric_value = metrics[metric_name]
 
     results = {
         "metric_name": metric_name,

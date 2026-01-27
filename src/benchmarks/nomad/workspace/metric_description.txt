@@ -1,0 +1,17 @@
+Evaluation
+Submissions are evaluated on the column-wise root mean squared logarithmic error.
+
+The RMSLE for a single column calculated as
+
+[
+\sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(\log(p_i + 1) - \log(a_i + 1)\right)^2}
+]
+
+where:
+
+\\(n\\) is the total number of observations
+\\(p_i\\) is your prediction
+\\(a_i\\) is the actual value
+\\(\log(x)\\) is the natural logarithm of \\(x\\)
+
+The final score is the mean of the RMSLE over all columns (in this case, 2).
