@@ -18,23 +18,99 @@ python run_toy_bench.py --config config.json --num-steps 3
 python run_nomad_bench.py --config config.json --num-steps 3
 ```
 
+---
+
 ## Setup
 
-1. **Create virtual environment**
+### 1. Clone & Create Environment
+
+```bash
+git clone <repo-url>
+cd DSC180A-Q1Project
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configure API Keys
+
+Create `.env` in repo root:
+
+```
+OPENAI_API_KEY=<your-openai-key>
+```
+
+---
+
+## Kaggle Dataset Setup
+
+We use Kaggle datasets as data sources. Benchmarks run **offline** using prepared artifacts—no Kaggle access during experiments.
+
+### Prerequisites
+
+1. **Create Kaggle API credentials**:
+   - Go to [kaggle.com/settings](https://www.kaggle.com/settings) → API → Create New Token
+   - This downloads `kaggle.json`
+
+2. **Install the credentials**:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
+   mkdir -p ~/.kaggle
+   mv ~/Downloads/kaggle.json ~/.kaggle/
+   chmod 600 ~/.kaggle/kaggle.json
    ```
 
-2. **Install dependencies**
-   ```bash
-   pip install openai pandas scikit-learn
-   ```
+3. **Join the competitions** (accept rules on each page):
+   - [NOMAD 2018](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) - Click "Late Submission"
+   - [Leaf Classification](https://www.kaggle.com/c/leaf-classification) - Click "Late Submission"
 
-3. **Configure API keys** - Create `.env` in repo root:
-   ```
-   OPENAI_API_KEY=<your-key>
-   ```
+---
+
+### NOMAD Dataset (Materials Science Regression)
+
+```bash
+# 1. Fetch from Kaggle
+python3 scripts/fetch_nomad.py
+
+# 2. Unzip the nested archives
+cd kaggle-data/nomad/raw
+unzip -o nomad2018-predict-transparent-conductors.zip
+unzip -o train.csv.zip
+unzip -o test.csv.zip
+cd ../../..
+
+# 3. Prepare offline artifacts
+python3 scripts/prepare_nomad.py --float32
+```
+
+Prepared data saved to `src/benchmarks/nomad/workspace/`.
+
+---
+
+### Leaf Dataset (Species Classification)
+
+```bash
+# 1. Fetch from Kaggle
+python3 scripts/fetch_leaf.py
+
+# 2. Unzip the nested archives
+cd kaggle-data/leaf/raw
+unzip -o leaf-classification.zip
+unzip -o train.csv.zip
+unzip -o test.csv.zip
+cd ../../..
+
+# 3. Prepare offline artifacts
+python3 scripts/prepare_leaf.py --float32
+```
+
+Prepared data saved to `src/benchmarks/leaf/workspace/`.
+
+---
 
 ## Configuration
 
@@ -55,21 +131,21 @@ Edit `config.json` to adjust:
 ## Project Structure
 
 ```
+scripts/                # Data fetching and preparation
+├── fetch_nomad.py
+├── fetch_leaf.py
+├── prepare_nomad.py
+└── prepare_leaf.py
+
 src/
-├── benchmarks/     # BaseBenchmark + implementations
+├── benchmarks/         # BaseBenchmark + implementations
 │   ├── base.py
-│   ├── nomad/      # NOMAD benchmark
-│   └── toy/        # Toy benchmark
-└── utils/          # Config, logging, CLI utilities
+│   ├── nomad/          # NOMAD benchmark
+│   ├── leaf/           # Leaf benchmark
+│   └── toy/            # Toy benchmark
+└── utils/              # Config, logging, CLI utilities
 
-traces/             # Output JSONL traces
+kaggle-data/            # Raw Kaggle downloads (gitignored)
+traces/                 # Output JSONL traces
 ```
 
-## NOMAD Data Setup
-
-```bash
-# Requires Kaggle CLI + competition acceptance
-kaggle competitions download -c nomad2018-predict-transparent-conductors -p kaggle-data/nomad/raw
-cd kaggle-data/nomad/raw && unzip *.zip
-python scripts/prepare_nomad.py --float32
-```

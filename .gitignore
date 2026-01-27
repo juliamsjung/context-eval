@@ -8,6 +8,7 @@ env/
 venv/
 ENV/
 .venv
+.env
 
 # Trace files (generated at runtime)
 traces/
@@ -56,6 +57,10 @@ src/benchmarks/toy/workspace/results.json
 kaggle-data/nomad/raw/
 kaggle-data/nomad/processed/
 
+# Kaggle Leaf data (downloaded locally)
+kaggle-data/leaf/raw/
+kaggle-data/leaf/processed/
+
 # NOMAD bench artifacts
 src/benchmarks/nomad/workspace/run_config.json
 src/benchmarks/nomad/workspace/features.npy
@@ -64,7 +69,17 @@ src/benchmarks/nomad/workspace/dataset_context.json
 src/benchmarks/nomad/workspace/prepared_meta.json
 src/benchmarks/nomad/workspace/results.json
 
+# Leaf bench artifacts
+src/benchmarks/leaf/workspace/run_config.json
+src/benchmarks/leaf/workspace/features.npy
+src/benchmarks/leaf/workspace/labels.npy
+src/benchmarks/leaf/workspace/dataset_context.json
+src/benchmarks/leaf/workspace/prepared_meta.json
+src/benchmarks/leaf/workspace/label_mapping.json
+src/benchmarks/leaf/workspace/results.json
+
 # New directories for experiment outputs
 outputs/
 data/
+
 
