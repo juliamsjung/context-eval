@@ -131,8 +131,8 @@ class NomadBenchmark(BaseBenchmark):
         # dataset_context removed - will be reintroduced via explicit visibility flags
 
         return (
-            "You are tuning a HistGradientBoostingRegressor to predict bandgap energy (eV) "
-            "from the NOMAD 2018 dataset. Use the structured information below to recommend "
+            "You are tuning a HistGradientBoostingRegressor for a regression task. "
+            "Use the structured information below to recommend "
             "a new configuration that minimizes the evaluation metric.\n"
             f"{json.dumps(prompt_payload, indent=2)}\n\n"
             "Return JSON with numeric keys among "
