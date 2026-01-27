@@ -40,8 +40,7 @@ python run_nomad_bench.py --config config.json --num-steps 3
 
 Edit `config.json` to adjust:
 - `model`: LLM model (default: `gpt-4o-mini`)
-- `policy_type`: `short_context` or `long_context`
-- `reasoning_mode`: `agentic` (ReAct loop) or `controller` (single-shot)
+- `context_policies`: Configure chunk limits and summary sizes for short/long context modes
 
 ## CLI Options
 
@@ -49,8 +48,6 @@ Edit `config.json` to adjust:
 |------|-------------|
 | `--config` | Path to config file |
 | `--num-steps` | Number of optimization iterations |
-| `--policy-type` | `short_context` / `long_context` |
-| `--reasoning-mode` | `agentic` / `controller` |
 | `--seed` | Random seed |
 | `--run-id` | Custom run identifier |
 | `--output-dir` | Custom output directory for traces |
@@ -59,7 +56,6 @@ Edit `config.json` to adjust:
 
 ```
 src/
-├── agent/          # AgentRunner, policies, tools
 ├── benchmarks/     # BaseBenchmark + implementations
 │   ├── base.py
 │   ├── nomad/      # NOMAD benchmark

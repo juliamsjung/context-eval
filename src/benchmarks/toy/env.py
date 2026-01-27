@@ -14,10 +14,9 @@ class ToyTabularEnv(BaseEnv):
         return Path(__file__).resolve().parent / "workspace"
 
     def _init_config(self) -> None:
-        """Initialize run_config.json from base config if it doesn't exist."""
-        if not self.config_path.exists():
-            if not self.base_config_path.exists():
-                raise FileNotFoundError(
-                    f"Baseline config.json not found at {self.base_config_path}"
-                )
-            self.config_path.write_text(self.base_config_path.read_text())
+        """Initialize run_config.json from base config (always reset to ensure clean baseline)."""
+        if not self.base_config_path.exists():
+            raise FileNotFoundError(
+                f"Baseline config.json not found at {self.base_config_path}"
+            )
+        self.config_path.write_text(self.base_config_path.read_text())

@@ -33,16 +33,6 @@ def parse_benchmark_args(
     # Common arguments
     parser.add_argument("--config", default="config.json", help="Path to the main project config.")
     parser.add_argument("--num-steps", type=int, help="Override number of tuning steps.")
-    parser.add_argument(
-        "--policy-type",
-        choices=["short_context", "long_context"],
-        help="Select the context policy for this run.",
-    )
-    parser.add_argument(
-        "--reasoning-mode",
-        choices=["controller", "agentic"],
-        help="Toggle the reasoning style (agentic loop vs legacy controller).",
-    )
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducibility.")
     parser.add_argument("--output-dir", type=str, help="Custom output directory for traces.")
     parser.add_argument("--run-id", type=str, help="Custom run ID for batch tracking.")
@@ -65,12 +55,6 @@ def parse_benchmark_args(
     # Process num_steps with benchmark-specific default
     default_steps = int(bench_cfg.get("num_steps", 3))
     args.num_steps = args.num_steps or default_steps
-    
-    # Set defaults from config if not provided via CLI
-    if args.policy_type is None:
-        args.policy_type = cfg.get("policy_type", "short_context")
-    if args.reasoning_mode is None:
-        args.reasoning_mode = cfg.get("reasoning_mode", "controller")
-    
+
     return args, cfg
 

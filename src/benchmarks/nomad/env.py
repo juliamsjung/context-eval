@@ -24,11 +24,10 @@ class NomadEnv(BaseEnv):
         return Path(__file__).resolve().parent / "workspace"
 
     def _init_config(self) -> None:
-        """Initialize run_config.json from base config if it doesn't exist."""
+        """Initialize run_config.json from base config (always reset to ensure clean baseline)."""
         if not self.base_config_path.exists():
             raise FileNotFoundError(f"Base config missing at {self.base_config_path}")
-        if not self.config_path.exists():
-            self.config_path.write_text(self.base_config_path.read_text())
+        self.config_path.write_text(self.base_config_path.read_text())
 
     def _validate_required_files(self) -> None:
         """Validate that required NOMAD workspace files exist."""

@@ -20,7 +20,6 @@ class ToyTabularBenchmark(BaseBenchmark):
     def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
         super().__init__(config, project_config)
         self.env = ToyTabularEnv()
-        self._setup_agent_if_needed()
 
     @property
     def benchmark_name(self) -> str:
@@ -32,7 +31,7 @@ class ToyTabularBenchmark(BaseBenchmark):
 
     @property
     def agent_id(self) -> str:
-        return f"toy_{self.config.reasoning_mode}_{self.config.policy_type}"
+        return "toy_llm"
 
     def get_default_config(self) -> Dict[str, Any]:
         return self.env.read_config()
@@ -63,61 +62,6 @@ class ToyTabularBenchmark(BaseBenchmark):
                 pass
         return sanitized
 
-    # Abstract hook implementations
-    def _build_agent_tools(self) -> Any:
-        """Build tools for the toy benchmark agent."""
-        from src.agent import build_toy_tools
-
-        context_summary = self._build_context_summary()
-        return build_toy_tools(
-            context_summary=context_summary,
-            retrieval_config=self.policy_obj.config,
-            clarifier_defaults={
-                "what metric should i optimize?": "Accuracy - higher is better.",
-                "what are the parameter bounds?": f"C: {PARAM_BOUNDS['C']}, max_iter: {PARAM_BOUNDS['max_iter']}",
-            },
-        )
-
-    def _get_agent_config_defaults(self) -> Dict[str, str]:
-        return {
-            "dataset_id": "toy_tabular",
-            "agent_id": self.project_config.get("project_name", "toy_agent"),
-        }
-
-    def _build_context_summary(self) -> Dict[str, Any]:
-        """Build context for agent about the toy task."""
-        return {
-            "task": "Tune LogisticRegression hyperparameters",
-            "parameters": list(PARAM_BOUNDS.keys()),
-            "bounds": PARAM_BOUNDS,
-            "metric": "accuracy (higher is better)",
-            "dataset": "1000 samples, 20 features, binary classification",
-        }
-
-    def _build_agent_state(self, history: List[IterationResult]) -> Dict[str, Any]:
-        history_dicts = [
-            {
-                "step": r.step,
-                "config": {"C": r.config.get("C"), "max_iter": r.config.get("max_iter")},
-                "metrics": r.metrics,
-            }
-            for r in history
-        ]
-        return {
-            "context_excerpt": json.dumps(self._build_context_summary(), sort_keys=True),
-            "history": history_dicts[-self.config.history_window:],
-            "clarification_hints": {
-                "what metric should i optimize?": "Accuracy - higher is better.",
-            },
-        }
-
-    def _build_agent_task_input(self, step: int, last_metrics: Dict[str, float]) -> str:
-        return (
-            f"Iteration {step}/{self.config.num_steps}: improve LogisticRegression "
-            f"for the Toy tabular benchmark. Current accuracy={last_metrics.get('accuracy', 'N/A')}. "
-            f"Propose new hyperparameters C and max_iter."
-        )
-
     def _get_llm_system_prompt(self) -> str:
         return "You propose new logistic regression hyperparameters based on past evaluations."
 
@@ -147,17 +91,13 @@ class ToyTabularBenchmark(BaseBenchmark):
 def run_toy_tabular(
     num_steps: int = 3,
     *,
-    policy_type: str = "short_context",
-    reasoning_mode: str = "controller",
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run Toy benchmark with agent support."""
+    """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
         num_steps=num_steps,
-        policy_type=policy_type,
-        reasoning_mode=reasoning_mode,
         seed=seed,
     )
     benchmark = ToyTabularBenchmark(bench_config, config or {})
