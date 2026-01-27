@@ -133,7 +133,7 @@ class NomadBenchmark(BaseBenchmark):
         return (
             "You are tuning a HistGradientBoostingRegressor for a regression task. "
             "Use the structured information below to recommend "
-            "a new configuration that minimizes the evaluation metric.\n"
+            "a new configuration that improves the score.\n"
             f"{json.dumps(prompt_payload, indent=2)}\n\n"
             "Return JSON with numeric keys among "
             f"{list(PARAM_BOUNDS.keys())}. Keep values within reasonable ranges."

@@ -84,7 +84,7 @@ class ToyTabularBenchmark(BaseBenchmark):
             history_lines = "- baseline only"
 
         return (
-            "You are adjusting hyperparameters for logistic regression on a fixed synthetic dataset.\n"
+            "You are adjusting hyperparameters for logistic regression on a fixed dataset.\n"
             f"Current config:\n{json.dumps({'C': current_config.get('C'), 'max_iter': current_config.get('max_iter')}, indent=2)}\n\n"
             f"Latest score: {self._get_primary_score(last_metrics):.4f}\n\n"
             f"History:\n{history_lines}\n\n"
