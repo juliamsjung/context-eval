@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
@@ -32,6 +33,10 @@ class ToyTabularBenchmark(BaseBenchmark):
     @property
     def agent_id(self) -> str:
         return "toy_llm"
+
+    @property
+    def workspace_path(self) -> Path:
+        return Path(__file__).resolve().parent / "workspace"
 
     def get_default_config(self) -> Dict[str, Any]:
         return self.env.read_config()
@@ -75,26 +80,39 @@ class ToyTabularBenchmark(BaseBenchmark):
         last_metrics: Dict[str, float],
         history: List[IterationResult],
     ) -> str:
-        history_lines = "\n".join(
-            f"- step {entry.step}: score={self._get_primary_score(entry.metrics):.4f}, "
-            f"C={entry.config.get('C')}, max_iter={entry.config.get('max_iter')}"
-            for entry in history
-        )
-        if not history_lines:
+        filtered_config = {'C': current_config.get('C'), 'max_iter': current_config.get('max_iter')}
+        bundle = self._build_context_bundle(filtered_config, last_metrics, history)
+
+        # Format history as text lines for toy benchmark style
+        if bundle.get("recent_history"):
+            history_lines = "\n".join(
+                f"- step {e['step']}: score={e['score']:.4f}, C={e['config'].get('C')}, max_iter={e['config'].get('max_iter')}"
+                for e in bundle["recent_history"]
+            )
+        else:
             history_lines = "- baseline only"
 
-        return (
-            "You are adjusting hyperparameters for logistic regression on a fixed dataset.\n"
-            f"Current config:\n{json.dumps({'C': current_config.get('C'), 'max_iter': current_config.get('max_iter')}, indent=2)}\n\n"
-            f"Latest score: {self._get_primary_score(last_metrics):.4f}\n\n"
-            f"History:\n{history_lines}\n\n"
-            "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
-        )
+        prompt = f"You are adjusting hyperparameters for logistic regression on a fixed dataset.\n"
+        prompt += f"Current config:\n{json.dumps(filtered_config, indent=2)}\n\n"
+        prompt += f"Latest score: {bundle['latest_score']:.4f}\n\n"
+        prompt += f"History:\n{history_lines}\n\n"
+
+        # Add context if available
+        if bundle.get("task_description"):
+            prompt += f"Task:\n{bundle['task_description']}\n\n"
+        if bundle.get("metric_description"):
+            prompt += f"Metric:\n{bundle['metric_description']}\n\n"
+
+        prompt += "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
+        return prompt
 
 
 def run_toy_tabular(
     num_steps: int = 3,
     *,
+    history_window: int = 5,
+    show_task: bool = False,
+    show_metric: bool = False,
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
@@ -102,7 +120,10 @@ def run_toy_tabular(
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
         num_steps=num_steps,
+        history_window=history_window,
         seed=seed,
+        show_task=show_task,
+        show_metric=show_metric,
     )
     benchmark = ToyTabularBenchmark(bench_config, config or {})
     result = benchmark.run(run_id=run_id)

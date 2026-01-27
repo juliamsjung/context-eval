@@ -84,6 +84,8 @@ class BenchmarkConfig:
     num_steps: int = 3
     history_window: int = 5
     seed: int = 0
+    show_task: bool = False
+    show_metric: bool = False
 
 
 @dataclass
@@ -156,6 +158,64 @@ class BaseBenchmark(ABC):
         history: List[IterationResult],
     ) -> str:
         """Build the user prompt for direct LLM calls."""
+        ...
+
+    @property
+    def workspace_path(self) -> Path:
+        """Return workspace directory. Subclasses may override."""
+        raise NotImplementedError("Subclass must define workspace_path")
+
+    def _load_artifact(self, filename: str) -> Optional[str]:
+        """Load text artifact from workspace if it exists."""
+        try:
+            path = self.workspace_path / filename
+            if path.exists():
+                return path.read_text().strip()
+        except NotImplementedError:
+            pass
+        return None
+
+    def _get_task_description(self) -> Optional[str]:
+        """Load task_description.txt if show_task is enabled."""
+        if not self.config.show_task:
+            return None
+        return self._load_artifact("task_description.txt")
+
+    def _get_metric_description(self) -> Optional[str]:
+        """Load metric_description.txt if show_metric is enabled."""
+        if not self.config.show_metric:
+            return None
+        return self._load_artifact("metric_description.txt")
+
+    def _build_context_bundle(
+        self,
+        current_config: Dict[str, Any],
+        last_metrics: Dict[str, float],
+        history: List[IterationResult],
+    ) -> Dict[str, Any]:
+        """Build context bundle with visibility-controlled elements."""
+        bundle: Dict[str, Any] = {
+            "current_config": current_config,
+            "latest_score": self._get_primary_score(last_metrics),
+            "recent_history": [
+                {"step": e.step, "config": e.config, "score": self._get_primary_score(e.metrics)}
+                for e in history[-self.config.history_window:]
+            ] if self.config.history_window > 0 else [],
+        }
+
+        task_desc = self._get_task_description()
+        if task_desc:
+            bundle["task_description"] = task_desc
+
+        metric_desc = self._get_metric_description()
+        if metric_desc:
+            bundle["metric_description"] = metric_desc
+
+        return bundle
+
+    @abstractmethod
+    def _get_primary_score(self, metrics: Dict[str, float]) -> float:
+        """Extract primary score for agent feedback. Subclass must implement."""
         ...
 
     def propose_config(
