@@ -92,7 +92,7 @@ class ToyTabularBenchmark(BaseBenchmark):
         else:
             history_lines = "- baseline only"
 
-        prompt = f"You are adjusting hyperparameters for logistic regression on a fixed dataset.\n"
+        prompt = f"You are adjusting hyperparameters for logistic regression.\n"
         prompt += f"Current config:\n{json.dumps(filtered_config, indent=2)}\n\n"
         prompt += f"Latest score: {bundle['latest_score']:.4f}\n\n"
         prompt += f"History:\n{history_lines}\n\n"

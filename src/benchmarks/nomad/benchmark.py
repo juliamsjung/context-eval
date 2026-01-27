@@ -126,7 +126,7 @@ class NomadBenchmark(BaseBenchmark):
         bundle = self._build_context_bundle(filtered_config, last_metrics, history)
 
         return (
-            "You are tuning a HistGradientBoostingRegressor for a regression task. "
+            "You are tuning a HistGradientBoostingRegressor."
             "Use the structured information below to recommend "
             "a new configuration that improves the score.\n"
             f"{json.dumps(bundle, indent=2)}\n\n"
