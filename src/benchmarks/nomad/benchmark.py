@@ -101,6 +101,10 @@ class NomadBenchmark(BaseBenchmark):
                 continue
         return sanitized
 
+    def _get_primary_score(self, metrics: Dict[str, float]) -> float:
+        """Extract primary score for agent feedback (lower is better for MAE)."""
+        return metrics.get("mae", 0.0)
+
     def _get_llm_system_prompt(self) -> str:
         return "You are an ML assistant optimizing gradient boosting hyperparameters."
 
@@ -114,23 +118,22 @@ class NomadBenchmark(BaseBenchmark):
             {
                 "step": entry.step,
                 "config": entry.config,
-                "metrics": entry.metrics,
+                "score": self._get_primary_score(entry.metrics),
             }
             for entry in history[-self.config.history_window:]
         ]
 
         prompt_payload = {
             "current_config": {k: current_config.get(k) for k in PARAM_BOUNDS.keys() if k in current_config},
-            "latest_metrics": last_metrics,
+            "latest_score": self._get_primary_score(last_metrics),
             "recent_history": history_payload,
         }
-        if self.context_summary:
-            prompt_payload["dataset_context"] = self.context_summary
+        # dataset_context removed - will be reintroduced via explicit visibility flags
 
         return (
             "You are tuning a HistGradientBoostingRegressor to predict bandgap energy (eV) "
             "from the NOMAD 2018 dataset. Use the structured information below to recommend "
-            "a new configuration that lowers the evaluation metric (default: MAE).\n"
+            "a new configuration that minimizes the evaluation metric.\n"
             f"{json.dumps(prompt_payload, indent=2)}\n\n"
             "Return JSON with numeric keys among "
             f"{list(PARAM_BOUNDS.keys())}. Keep values within reasonable ranges."
