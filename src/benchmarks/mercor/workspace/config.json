@@ -1,0 +1,6 @@
+{
+  "max_features": 5000,
+  "learning_rate": 0.01,
+  "max_iter": 100,
+  "threshold": 0.5
+}

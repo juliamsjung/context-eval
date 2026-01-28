@@ -67,6 +67,7 @@ We use Kaggle datasets as data sources. Benchmarks run **offline** using prepare
 3. **Join the competitions** (accept rules on each page):
    - [NOMAD 2018](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) - Click "Late Submission"
    - [Leaf Classification](https://www.kaggle.com/c/leaf-classification) - Click "Late Submission"
+   - [Mercor AI Detection](https://www.kaggle.com/competitions/mercor-ai-detection) - Click "Join Competition"
 
 ---
 
@@ -112,6 +113,25 @@ Prepared data saved to `src/benchmarks/leaf/workspace/`.
 
 ---
 
+### Mercor Dataset (AI Text Detection)
+
+```bash
+# 1. Fetch from Kaggle
+python3 scripts/fetch_mercor.py
+
+# 2. Unzip the archive
+cd kaggle-data/mercor/raw
+unzip -o mercor-ai-detection.zip
+cd ../../..
+
+# 3. Prepare offline artifacts
+python3 scripts/prepare_mercor.py
+```
+
+Prepared data saved to `src/benchmarks/mercor/workspace/`.
+
+---
+
 ## Configuration
 
 Edit `config.json` to adjust:
@@ -134,14 +154,17 @@ Edit `config.json` to adjust:
 scripts/                # Data fetching and preparation
 ├── fetch_nomad.py
 ├── fetch_leaf.py
+├── fetch_mercor.py
 ├── prepare_nomad.py
-└── prepare_leaf.py
+├── prepare_leaf.py
+└── prepare_mercor.py
 
 src/
 ├── benchmarks/         # BaseBenchmark + implementations
 │   ├── base.py
 │   ├── nomad/          # NOMAD benchmark
 │   ├── leaf/           # Leaf benchmark
+│   ├── mercor/         # Mercor AI Detection benchmark
 │   └── toy/            # Toy benchmark
 └── utils/              # Config, logging, CLI utilities
 
