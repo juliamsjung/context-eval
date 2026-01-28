@@ -340,6 +340,11 @@ class BaseBenchmark(ABC):
             config_hash=self._config_hash(current_config),
             max_steps=self.config.num_steps,
             seed=self.config.seed,
+            experiment_tags={
+                "history_window": self.config.history_window,
+                "show_task": self.config.show_task,
+                "show_metric": self.config.show_metric,
+            },
         )
 
         # Step 0: Baseline
