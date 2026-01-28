@@ -10,6 +10,8 @@ Inspired by [MLAgentBench](https://arxiv.org/pdf/2310.03302) and [MLEBench](http
 
 ## Quick Start
 
+Note: Needs fixing (NOMAD script has flags).
+
 ```bash
 # Toy benchmark (logistic regression tuning)
 python run_toy_bench.py --config config.json --num-steps 3
@@ -54,8 +56,8 @@ We use Kaggle datasets as data sources. Benchmarks run **offline** using prepare
 ### Prerequisites
 
 1. **Create Kaggle API credentials**:
-   - Go to [kaggle.com/settings](https://www.kaggle.com/settings) → API → Create New Token
-   - This downloads `kaggle.json`
+   - Go to [kaggle.com/settings](https://www.kaggle.com/settings) → Scroll to "API" → Create Legacy API Key
+   - This downloads `kaggle.json`. It should be saved in your `/Downloads` folder.
 
 2. **Install the credentials**:
    ```bash
@@ -67,10 +69,11 @@ We use Kaggle datasets as data sources. Benchmarks run **offline** using prepare
 3. **Join the competitions** (accept rules on each page):
    - [NOMAD 2018](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) - Click "Late Submission"
    - [Leaf Classification](https://www.kaggle.com/c/leaf-classification) - Click "Late Submission"
+   - [Mercor AI Detection](https://www.kaggle.com/competitions/mercor-ai-detection) - Click "Late Submission"
 
 ---
 
-### NOMAD Dataset (Materials Science Regression)
+### NOMAD Dataset (Materials Science Regression - Tabular Data)
 
 ```bash
 # 1. Fetch from Kaggle
@@ -91,7 +94,7 @@ Prepared data saved to `src/benchmarks/nomad/workspace/`.
 
 ---
 
-### Leaf Dataset (Species Classification)
+### Leaf Dataset (Species Classification - Image Data (Tabular Data of the Image's Features))
 
 ```bash
 # 1. Fetch from Kaggle
@@ -112,9 +115,28 @@ Prepared data saved to `src/benchmarks/leaf/workspace/`.
 
 ---
 
-## Configuration
+### Mercor Dataset (AI Text Detection - Text Data)
 
-Edit `config.json` to adjust:
+```bash
+# 1. Fetch from Kaggle
+python3 scripts/fetch_mercor.py
+
+# 2. Unzip the archive
+cd kaggle-data/mercor/raw
+unzip -o mercor-ai-detection.zip
+cd ../../..
+
+# 3. Prepare offline artifacts
+python3 scripts/prepare_mercor.py
+```
+
+Prepared data saved to `src/benchmarks/mercor/workspace/`.
+
+---
+
+## Configuration (note to author - might have to fix)
+
+Edit root `config.json` to adjust:
 - `model`: LLM model (default: `gpt-4o-mini`)
 - `context_policies`: Configure chunk limits and summary sizes for short/long context modes
 
@@ -134,14 +156,17 @@ Edit `config.json` to adjust:
 scripts/                # Data fetching and preparation
 ├── fetch_nomad.py
 ├── fetch_leaf.py
+├── fetch_mercor.py
 ├── prepare_nomad.py
-└── prepare_leaf.py
+├── prepare_leaf.py
+└── prepare_mercor.py
 
 src/
 ├── benchmarks/         # BaseBenchmark + implementations
 │   ├── base.py
 │   ├── nomad/          # NOMAD benchmark
 │   ├── leaf/           # Leaf benchmark
+│   ├── mercor/         # Mercor AI Detection benchmark
 │   └── toy/            # Toy benchmark
 └── utils/              # Config, logging, CLI utilities
 
