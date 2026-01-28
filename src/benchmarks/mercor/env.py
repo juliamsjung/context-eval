@@ -26,10 +26,9 @@ class MercorEnv(BaseEnv):
         return Path(__file__).resolve().parent / "workspace"
 
     def _init_config(self) -> None:
-        """Initialize run_config.json from base config (always reset to ensure clean baseline)."""
-        if not self.base_config_path.exists():
-            raise FileNotFoundError(f"Base config missing at {self.base_config_path}")
-        self.config_path.write_text(self.base_config_path.read_text())
+        """Initialize run_config if base config exists, otherwise skip (data-only env)."""
+        if self.base_config_path.exists():
+            self.config_path.write_text(self.base_config_path.read_text())
 
     def _validate_required_files(self) -> None:
         """Validate that required Mercor workspace files exist."""

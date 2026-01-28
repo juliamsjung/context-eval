@@ -120,7 +120,26 @@ def main() -> None:
     np.save(output_dir / "features.npy", features)
     np.save(output_dir / "labels.npy", labels)
 
+    # Check for images and create image path mapping
+    images_dir = raw_dir / "images"
+    image_paths = []
+    has_images = images_dir.exists() and images_dir.is_dir()
+    
+    if has_images:
+        for sample_id in df["id"].values:
+            img_path = images_dir / f"{sample_id}.jpg"
+            if img_path.exists():
+                image_paths.append(str(img_path))
+            else:
+                image_paths.append("")  # Missing image
+        np.save(output_dir / "image_paths.npy", np.array(image_paths, dtype=object), allow_pickle=True)
+        print(f"[prepare-leaf] Found {sum(1 for p in image_paths if p)} images")
+
     context = _compute_context(df, feature_cols, label_names)
+    context["has_images"] = has_images
+    if has_images:
+        context["images_dir"] = str(images_dir)
+        context["num_images"] = sum(1 for p in image_paths if p)
     (output_dir / "dataset_context.json").write_text(json.dumps(context, indent=2))
 
     # Save label encoder mapping
@@ -135,11 +154,15 @@ def main() -> None:
         "num_classes": len(label_names),
         "dtype": "float32" if args.float32 else "float64",
         "task": "multi-class classification",
+        "has_images": has_images,
     }
+    if has_images:
+        meta["image_paths_path"] = str(output_dir / "image_paths.npy")
     (output_dir / "prepared_meta.json").write_text(json.dumps(meta, indent=2))
 
     print(f"[prepare-leaf] Saved arrays and metadata to {output_dir}")
     print(f"[prepare-leaf] {features.shape[0]} samples, {features.shape[1]} features, {len(label_names)} classes")
+
 
 
 if __name__ == "__main__":

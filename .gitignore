@@ -76,7 +76,9 @@ src/benchmarks/leaf/workspace/labels.npy
 src/benchmarks/leaf/workspace/dataset_context.json
 src/benchmarks/leaf/workspace/prepared_meta.json
 src/benchmarks/leaf/workspace/label_mapping.json
+src/benchmarks/leaf/workspace/image_paths.npy
 src/benchmarks/leaf/workspace/results.json
+
 
 # Kaggle Mercor data (downloaded locally)
 kaggle-data/mercor/raw/

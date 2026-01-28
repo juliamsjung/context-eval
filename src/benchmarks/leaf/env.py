@@ -18,6 +18,7 @@ class LeafEnv(BaseEnv):
         self.features_path = self.workspace / "features.npy"
         self.labels_path = self.workspace / "labels.npy"
         self.label_mapping_path = self.workspace / "label_mapping.json"
+        self.image_paths_path = self.workspace / "image_paths.npy"
         self._validate_required_files()
 
     def _get_default_workspace(self) -> Path:
@@ -25,10 +26,9 @@ class LeafEnv(BaseEnv):
         return Path(__file__).resolve().parent / "workspace"
 
     def _init_config(self) -> None:
-        """Initialize run_config.json from base config (always reset to ensure clean baseline)."""
-        if not self.base_config_path.exists():
-            raise FileNotFoundError(f"Base config missing at {self.base_config_path}")
-        self.config_path.write_text(self.base_config_path.read_text())
+        """Initialize run_config if base config exists, otherwise skip (data-only env)."""
+        if self.base_config_path.exists():
+            self.config_path.write_text(self.base_config_path.read_text())
 
     def _validate_required_files(self) -> None:
         """Validate that required Leaf workspace files exist."""
@@ -49,3 +49,15 @@ class LeafEnv(BaseEnv):
         if not self.label_mapping_path.exists():
             return {}
         return json.loads(self.label_mapping_path.read_text())
+
+    @property
+    def has_images(self) -> bool:
+        """Check if image data is available."""
+        return self.image_paths_path.exists()
+
+    def get_image_paths(self) -> list[str]:
+        """Get list of image paths (empty strings for missing images)."""
+        import numpy as np
+        if not self.has_images:
+            return []
+        return list(np.load(self.image_paths_path, allow_pickle=True))
