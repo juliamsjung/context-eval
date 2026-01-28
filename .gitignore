@@ -81,6 +81,3 @@ src/benchmarks/leaf/workspace/results.json
 # New directories for experiment outputs
 outputs/
 data/
-
-
-kaggle-data/mercor/
