@@ -74,6 +74,9 @@ class RunLogger:
         max_steps: int,
         seed: int,
         notes: str = "",
+        # experiment_tags are for analysis only.
+        # MUST NOT be included in agent-visible prompts or context bundles.
+        experiment_tags: dict[str, Any] | None = None,
     ) -> None:
         """
         Log the start of a run. This should be called exactly once per run.
@@ -86,6 +89,7 @@ class RunLogger:
                 "max_steps": max_steps,
                 "seed": seed,
                 "notes": notes,
+                "experiment_tags": experiment_tags or {},
             },
         )
 
