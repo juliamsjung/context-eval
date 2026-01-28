@@ -1,0 +1,9 @@
+{
+  "ids_path": "/Users/adrianapsay/dsc180a/DSC180A-Q1Project/src/benchmarks/mercor/workspace/ids.npy",
+  "topics_path": "/Users/adrianapsay/dsc180a/DSC180A-Q1Project/src/benchmarks/mercor/workspace/topics.npy",
+  "answers_path": "/Users/adrianapsay/dsc180a/DSC180A-Q1Project/src/benchmarks/mercor/workspace/answers.npy",
+  "labels_path": "/Users/adrianapsay/dsc180a/DSC180A-Q1Project/src/benchmarks/mercor/workspace/labels.npy",
+  "num_rows": 269,
+  "task": "binary classification",
+  "target": "is_cheating"
+}
