@@ -149,6 +149,9 @@ Edit root `config.json` to adjust:
 | `--seed` | Random seed |
 | `--run-id` | Custom run identifier |
 | `--output-dir` | Custom output directory for traces |
+| `--show-task` | Include task description in LLM prompt |
+| `--show-metric` | Include metric description in LLM prompt |
+| `--history-window` | Number of history entries to include (default: 5, 0=none) |
 
 ## Project Structure
 
