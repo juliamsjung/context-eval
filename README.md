@@ -10,14 +10,12 @@ Inspired by [MLAgentBench](https://arxiv.org/pdf/2310.03302) and [MLEBench](http
 
 ## Quick Start
 
-Note: Needs fixing (NOMAD script has flags).
-
 ```bash
 # Toy benchmark (logistic regression tuning)
 python run_toy_bench.py --config config.json --num-steps 3
 
 # NOMAD benchmark (materials science regression)
-python run_nomad_bench.py --config config.json --num-steps 3
+python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-metric
 ```
 
 ---
@@ -152,6 +150,36 @@ Edit root `config.json` to adjust:
 | `--show-task` | Include task description in LLM prompt |
 | `--show-metric` | Include metric description in LLM prompt |
 | `--history-window` | Number of history entries to include (default: 5, 0=none) |
+
+## Running Benchmarks
+
+### Available Benchmarks
+
+| Script | Dataset | Task Type |
+|--------|---------|-----------|
+| `run_toy_bench.py` | Synthetic | Logistic regression tuning |
+| `run_nomad_bench.py` | NOMAD 2018 | Materials science regression |
+
+### Examples
+
+```bash
+# Basic run with default context policy
+python run_toy_bench.py --config config.json --num-steps 5
+
+# Full context: task description + metric description + history
+python run_nomad_bench.py --config config.json --num-steps 5 \
+    --show-task --show-metric --history-window 5
+
+# Minimal context: no task/metric descriptions, no history
+python run_nomad_bench.py --config config.json --num-steps 5 \
+    --history-window 0
+
+# Custom run with seed for reproducibility
+python run_nomad_bench.py --config config.json --num-steps 10 \
+    --show-task --show-metric --seed 42 --run-id my-experiment
+```
+
+---
 
 ## Project Structure
 
