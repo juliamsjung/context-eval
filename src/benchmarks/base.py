@@ -20,7 +20,10 @@ except ImportError:  # pragma: no cover
     OPENAI_AVAILABLE = False
 
 from src.utils.config import get_env_var
-from src.utils.logging import RunLogger, start_run
+# TRACE ONLY imports
+from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
+# CONTEXT ONLY imports
+from src.context import ContextBundle, ContextAxes, ContextBuilder
 
 
 # Model pricing per million tokens (as of Jan 2025)
@@ -99,13 +102,27 @@ class IterationResult:
 
 
 class BaseBenchmark(ABC):
-    """Abstract base class for ML experimentation benchmarks."""
+    """Abstract base class for ML experimentation benchmarks.
+
+    This class manages the boundary between TRACE and CONTEXT layers:
+    - TRACE: RunLogger handles all observability/debugging (token usage, costs, etc.)
+    - CONTEXT: ContextBuilder constructs agent-visible information only
+    """
 
     def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
         self.config = config
         self.project_config = project_config or {}
         self.history: List[IterationResult] = []
+        # TRACE ONLY: Logger for observability events
         self.logger: Optional[RunLogger] = None
+        # CONTEXT ONLY: Builder for agent-visible context bundles
+        self._context_axes = ContextAxes(
+            history_window=config.history_window,
+            show_task=config.show_task,
+            show_metric=config.show_metric,
+        )
+        # Note: _context_builder is initialized lazily after workspace_path is available
+        self._context_builder: Optional[ContextBuilder] = None
 
     @property
     @abstractmethod
@@ -153,11 +170,17 @@ class BaseBenchmark(ABC):
     @abstractmethod
     def _build_llm_user_prompt(
         self,
-        current_config: Dict[str, Any],
-        last_metrics: Dict[str, float],
-        history: List[IterationResult],
+        bundle: ContextBundle,
     ) -> str:
-        """Build the user prompt for direct LLM calls."""
+        """
+        CONTEXT ONLY: Build the user prompt for direct LLM calls.
+
+        Args:
+            bundle: Validated ContextBundle containing only agent-visible data
+
+        Returns:
+            Formatted prompt string for the LLM
+        """
         ...
 
     @property
@@ -165,53 +188,43 @@ class BaseBenchmark(ABC):
         """Return workspace directory. Subclasses may override."""
         raise NotImplementedError("Subclass must define workspace_path")
 
-    def _load_artifact(self, filename: str) -> Optional[str]:
-        """Load text artifact from workspace if it exists."""
-        try:
-            path = self.workspace_path / filename
-            if path.exists():
-                return path.read_text().strip()
-        except NotImplementedError:
-            pass
-        return None
+    def _get_context_builder(self) -> ContextBuilder:
+        """
+        CONTEXT ONLY: Get or create the context builder instance.
 
-    def _get_task_description(self) -> Optional[str]:
-        """Load task_description.txt if show_task is enabled."""
-        if not self.config.show_task:
-            return None
-        return self._load_artifact("task_description.txt")
-
-    def _get_metric_description(self) -> Optional[str]:
-        """Load metric_description.txt if show_metric is enabled."""
-        if not self.config.show_metric:
-            return None
-        return self._load_artifact("metric_description.txt")
+        Lazily initializes the builder to allow workspace_path to be defined
+        by subclasses after __init__.
+        """
+        if self._context_builder is None:
+            try:
+                workspace = self.workspace_path
+            except NotImplementedError:
+                workspace = None
+            self._context_builder = ContextBuilder(
+                axes=self._context_axes,
+                score_extractor=self._get_primary_score,
+                workspace_path=workspace,
+            )
+        return self._context_builder
 
     def _build_context_bundle(
         self,
         current_config: Dict[str, Any],
         last_metrics: Dict[str, float],
         history: List[IterationResult],
-    ) -> Dict[str, Any]:
-        """Build context bundle with visibility-controlled elements."""
-        bundle: Dict[str, Any] = {
-            "current_config": current_config,
-            "latest_score": self._get_primary_score(last_metrics),
-            "recent_history": [
-                {"step": e.step, "config": e.config, "score": self._get_primary_score(e.metrics)}
-                for e in history[-self.config.history_window:]
-            ] if self.config.history_window > 0 else [],
-        }
+    ) -> ContextBundle:
+        """
+        CONTEXT ONLY: Build validated context bundle for agent consumption.
 
-        task_desc = self._get_task_description()
-        if task_desc:
-            bundle["task_description"] = task_desc
+        Delegates to ContextBuilder which enforces the trace/context boundary.
+        Full metric dictionaries are logged for analysis and reproducibility but
+        reduced to a scalar for agent context to preserve baseline invariance.
 
-        metric_desc = self._get_metric_description()
-        if metric_desc:
-            bundle["metric_description"] = metric_desc
-
-        return bundle
+        Returns:
+            Validated ContextBundle (raises ContextLeakageError if trace fields detected)
+        """
+        builder = self._get_context_builder()
+        return builder.build(current_config, last_metrics, history)
 
     @abstractmethod
     def _get_primary_score(self, metrics: Dict[str, float]) -> float:
@@ -253,8 +266,16 @@ class BaseBenchmark(ABC):
         if not api_key:
             return None, None
 
+        # CONTEXT ONLY: Build validated context bundle for agent
+        bundle = self._build_context_bundle(current_config, last_metrics, history)
+
         system_prompt = self._get_llm_system_prompt()
-        user_prompt = self._build_llm_user_prompt(current_config, last_metrics, history)
+        user_prompt = self._build_llm_user_prompt(bundle)
+
+        # Debug assertion: verify no trace fields leaked into prompt
+        if __debug__:
+            for field in TRACE_ONLY_FIELDS:
+                assert field not in user_prompt, f"Trace field '{field}' leaked to prompt"
 
         client = OpenAI(api_key=api_key)
         t0 = datetime.utcnow().timestamp()

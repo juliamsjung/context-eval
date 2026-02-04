@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
 from src.benchmarks.toy.env import ToyTabularEnv
+# CONTEXT ONLY import
+from src.context import ContextBundle
 
 
 PARAM_BOUNDS = {
@@ -76,32 +78,39 @@ class ToyTabularBenchmark(BaseBenchmark):
 
     def _build_llm_user_prompt(
         self,
-        current_config: Dict[str, Any],
-        last_metrics: Dict[str, float],
-        history: List[IterationResult],
+        bundle: ContextBundle,
     ) -> str:
-        filtered_config = {'C': current_config.get('C'), 'max_iter': current_config.get('max_iter')}
-        bundle = self._build_context_bundle(filtered_config, last_metrics, history)
+        """
+        CONTEXT ONLY: Build the user prompt from a validated ContextBundle.
+
+        Args:
+            bundle: Validated ContextBundle containing only agent-visible data
+        """
+        # Filter config to only tunable params (already validated by bundle)
+        filtered_config = {
+            'C': bundle.current_config.get('C'),
+            'max_iter': bundle.current_config.get('max_iter')
+        }
 
         # Format history as text lines for toy benchmark style
-        if bundle.get("recent_history"):
+        if bundle.recent_history:
             history_lines = "\n".join(
                 f"- step {e['step']}: score={e['score']:.4f}, C={e['config'].get('C')}, max_iter={e['config'].get('max_iter')}"
-                for e in bundle["recent_history"]
+                for e in bundle.recent_history
             )
         else:
             history_lines = "- baseline only"
 
         prompt = f"You are adjusting hyperparameters for logistic regression.\n"
         prompt += f"Current config:\n{json.dumps(filtered_config, indent=2)}\n\n"
-        prompt += f"Latest score: {bundle['latest_score']:.4f}\n\n"
+        prompt += f"Latest score: {bundle.latest_score:.4f}\n\n"
         prompt += f"History:\n{history_lines}\n\n"
 
         # Add context if available
-        if bundle.get("task_description"):
-            prompt += f"Task:\n{bundle['task_description']}\n\n"
-        if bundle.get("metric_description"):
-            prompt += f"Metric:\n{bundle['metric_description']}\n\n"
+        if bundle.task_description:
+            prompt += f"Task:\n{bundle.task_description}\n\n"
+        if bundle.metric_description:
+            prompt += f"Metric:\n{bundle.metric_description}\n\n"
 
         prompt += "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
         return prompt

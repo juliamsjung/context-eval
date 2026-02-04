@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
 from src.benchmarks.nomad.env import NomadEnv
+# CONTEXT ONLY import
+from src.context import ContextBundle
 
 
 DEFAULT_HISTORY_WINDOW = 5
@@ -27,7 +29,6 @@ class NomadBenchmark(BaseBenchmark):
     def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
         super().__init__(config, project_config)
         self.env = NomadEnv()
-        self.context_summary = self.env.read_context()
 
     @property
     def benchmark_name(self) -> str:
@@ -115,21 +116,33 @@ class NomadBenchmark(BaseBenchmark):
 
     def _build_llm_user_prompt(
         self,
-        current_config: Dict[str, Any],
-        last_metrics: Dict[str, float],
-        history: List[IterationResult],
+        bundle: ContextBundle,
     ) -> str:
-        # Filter config to only tunable params
-        filtered_config = {k: current_config.get(k) for k in PARAM_BOUNDS.keys() if k in current_config}
+        """
+        CONTEXT ONLY: Build the user prompt from a validated ContextBundle.
 
-        # Use shared context bundle builder
-        bundle = self._build_context_bundle(filtered_config, last_metrics, history)
+        Args:
+            bundle: Validated ContextBundle containing only agent-visible data
+        """
+        # Filter config to only tunable params (bundle already validated)
+        filtered_config = {k: bundle.current_config.get(k) for k in PARAM_BOUNDS.keys() if k in bundle.current_config}
+
+        # Build dict representation for JSON serialization
+        bundle_dict = {
+            "current_config": filtered_config,
+            "latest_score": bundle.latest_score,
+            "recent_history": bundle.recent_history,
+        }
+        if bundle.task_description:
+            bundle_dict["task_description"] = bundle.task_description
+        if bundle.metric_description:
+            bundle_dict["metric_description"] = bundle.metric_description
 
         return (
             "You are tuning a HistGradientBoostingRegressor."
             "Use the structured information below to recommend "
             "a new configuration that improves the score.\n"
-            f"{json.dumps(bundle, indent=2)}\n\n"
+            f"{json.dumps(bundle_dict, indent=2)}\n\n"
             "Return JSON with numeric keys among "
             f"{list(PARAM_BOUNDS.keys())}. Keep values within reasonable ranges."
         )
