@@ -29,7 +29,6 @@ class NomadBenchmark(BaseBenchmark):
     def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
         super().__init__(config, project_config)
         self.env = NomadEnv()
-        self.context_summary = self.env.read_context()
 
     @property
     def benchmark_name(self) -> str:

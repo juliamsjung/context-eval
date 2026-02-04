@@ -17,14 +17,10 @@ from src.trace.logger import (
     RunLogger,
     start_run,
     TRACES_ROOT,
-    _now_iso,
-    _default_run_id,
 )
 
 __all__ = [
     "RunLogger",
     "start_run",
     "TRACES_ROOT",
-    "_now_iso",
-    "_default_run_id",
 ]
