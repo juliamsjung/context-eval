@@ -111,6 +111,8 @@ class ToyTabularBenchmark(BaseBenchmark):
             prompt += f"Task:\n{bundle.task_description}\n\n"
         if bundle.metric_description:
             prompt += f"Metric:\n{bundle.metric_description}\n\n"
+        if bundle.resource_summary:
+            prompt += f"Resources used so far:\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
 
         prompt += "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
         return prompt
@@ -122,6 +124,7 @@ def run_toy_tabular(
     history_window: int = 5,
     show_task: bool = False,
     show_metric: bool = False,
+    show_resources: bool = False,
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
@@ -133,6 +136,7 @@ def run_toy_tabular(
         seed=seed,
         show_task=show_task,
         show_metric=show_metric,
+        show_resources=show_resources,
     )
     benchmark = ToyTabularBenchmark(bench_config, config or {})
     result = benchmark.run(run_id=run_id)

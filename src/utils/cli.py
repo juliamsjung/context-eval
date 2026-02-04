@@ -40,6 +40,7 @@ def parse_benchmark_args(
     # Context visibility flags
     parser.add_argument("--show-task", action="store_true", help="Include task description in prompt.")
     parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")
+    parser.add_argument("--show-resources", action="store_true", help="Include resource usage (tokens, cost, latency) in prompt.")
     parser.add_argument("--history-window", type=int, help="Number of history entries to show (0=none).")
     
     # Add benchmark-specific arguments if provided
