@@ -193,13 +193,20 @@ scripts/                # Data fetching and preparation
 └── prepare_mercor.py
 
 src/
-├── benchmarks/         # BaseBenchmark + implementations
+├── benchmarks/         # BaseBenchmark and task-specific implementations
 │   ├── base.py
 │   ├── nomad/          # NOMAD benchmark
-│   ├── leaf/           # Leaf benchmark
-│   ├── mercor/         # Mercor AI Detection benchmark
+│   ├── leaf/           # Leaf benchmark (WIP)
+│   ├── mercor/         # Mercor benchmark (WIP)
 │   └── toy/            # Toy benchmark
-└── utils/              # Config, logging, CLI utilities
+├── context/            # Agent-visible context construction and policies
+│   ├── ContextBundle
+│   ├── ContextAxes
+│   └── ContextBuilder
+├── trace/              # Observability layer (RunLogger, JSONL trace schema)
+│   ├── RunLogger
+│   └── TRACE_ONLY_FIELDS
+└── utils/              # CLI utilities, configuration helpers
 
 kaggle-data/            # Raw Kaggle downloads (gitignored)
 traces/                 # Output JSONL traces
