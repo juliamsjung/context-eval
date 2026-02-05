@@ -151,17 +151,17 @@ class NomadBenchmark(BaseBenchmark):
 
 
 def run_nomad_bench(
-    num_steps: int = 3,
+    num_steps: int,
     *,
-    history_window: int = DEFAULT_HISTORY_WINDOW,
-    show_task: bool = False,
-    show_metric: bool = False,
-    show_resources: bool = False,
-    config: Optional[Dict[str, Any]] = None,
-    seed: int = 0,
-    run_id: Optional[str] = None,
-    model: str = "gpt-4o-mini",
-    temperature: float = 0,
+    history_window: int,
+    show_task: bool,
+    show_metric: bool,
+    show_resources: bool,
+    config: Optional[Dict[str, Any]],
+    seed: int,
+    run_id: Optional[str],
+    model: str,
+    temperature: float,
 ) -> Dict[str, Any]:
     """Run NOMAD benchmark. Thin wrapper around NomadBenchmark."""
     bench_config = BenchmarkConfig(

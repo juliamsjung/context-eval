@@ -119,17 +119,17 @@ class ToyTabularBenchmark(BaseBenchmark):
 
 
 def run_toy_tabular(
-    num_steps: int = 3,
+    num_steps: int,
     *,
-    history_window: int = 5,
-    show_task: bool = False,
-    show_metric: bool = False,
-    show_resources: bool = False,
-    config: Optional[Dict[str, Any]] = None,
-    seed: int = 0,
-    run_id: Optional[str] = None,
-    model: str = "gpt-4o-mini",
-    temperature: float = 0,
+    history_window: int,
+    show_task: bool,
+    show_metric: bool,
+    show_resources: bool,
+    config: Optional[Dict[str, Any]],
+    seed: int,
+    run_id: Optional[str],
+    model: str,
+    temperature: float,
 ) -> Dict[str, Any]:
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
