@@ -31,4 +31,6 @@ TRACE_ONLY_FIELDS: FrozenSet[str] = frozenset({
     "config_hash",
     "input_tokens",
     "output_tokens",
+    "model",
+    "temperature",
 })

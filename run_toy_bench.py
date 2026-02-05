@@ -27,6 +27,8 @@ def main() -> None:
         config=cfg,
         seed=args.seed,
         run_id=args.run_id,
+        model=args.model,
+        temperature=args.temperature,
     )
 
     print(json.dumps(results, indent=2))

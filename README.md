@@ -154,6 +154,8 @@ Edit root `config.json` to adjust:
 | `--show-metric` | Include metric description in LLM prompt |
 | `--show-resources` | Include resource_summary (tokens, cost, latency) in LLM prompt |
 | `--history-window` | Number of history entries to include (default: 5, 0=none) |
+| `--model` | LLM model to use (default: gpt-4o-mini) |
+| `--temperature` | LLM temperature setting (default: 0) |
 
 ## Running Benchmarks
 

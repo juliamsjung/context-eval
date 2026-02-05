@@ -90,6 +90,8 @@ class BenchmarkConfig:
     show_task: bool = False
     show_metric: bool = False
     show_resources: bool = False
+    model: str = "gpt-4o-mini"
+    temperature: float = 0
 
 
 @dataclass
@@ -282,8 +284,8 @@ class BaseBenchmark(ABC):
         client = OpenAI(api_key=api_key)
         t0 = datetime.utcnow().timestamp()
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            temperature=0.2,
+            model=self.config.model,
+            temperature=self.config.temperature,
             max_tokens=250,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -294,8 +296,7 @@ class BaseBenchmark(ABC):
         content = resp.choices[0].message.content or ""
 
         # TRACE LAYER: Compute cost per call using pricing formulas
-        model = self.project_config.get("model", DEFAULT_MODEL)
-        pricing = MODEL_PRICING.get(model, MODEL_PRICING[DEFAULT_MODEL])
+        pricing = MODEL_PRICING.get(self.config.model, MODEL_PRICING[DEFAULT_MODEL])
         input_tokens = resp.usage.prompt_tokens
         output_tokens = resp.usage.completion_tokens
         api_cost = (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000
@@ -339,9 +340,8 @@ class BaseBenchmark(ABC):
 
         total_tokens = total_input + total_output
 
-        # Calculate cost (use model from config or default)
-        model = self.project_config.get("model", DEFAULT_MODEL)
-        pricing = MODEL_PRICING.get(model, MODEL_PRICING[DEFAULT_MODEL])
+        # Calculate cost using configured model
+        pricing = MODEL_PRICING.get(self.config.model, MODEL_PRICING[DEFAULT_MODEL])
         total_cost = (total_input * pricing["input"] + total_output * pricing["output"]) / 1_000_000
 
         return {
@@ -377,6 +377,8 @@ class BaseBenchmark(ABC):
                 "show_task": self.config.show_task,
                 "show_metric": self.config.show_metric,
                 "show_resources": self.config.show_resources,
+                "model": self.config.model,
+                "temperature": self.config.temperature,
             },
         )
 

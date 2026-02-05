@@ -30,6 +30,8 @@ class TestTraceOnlyFieldsDefinition:
             "config_hash",
             "input_tokens",
             "output_tokens",
+            "model",
+            "temperature",
         }
         assert expected == TRACE_ONLY_FIELDS
 

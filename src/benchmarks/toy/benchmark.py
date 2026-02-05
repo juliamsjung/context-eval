@@ -119,15 +119,17 @@ class ToyTabularBenchmark(BaseBenchmark):
 
 
 def run_toy_tabular(
-    num_steps: int = 3,
+    num_steps: int,
     *,
-    history_window: int = 5,
-    show_task: bool = False,
-    show_metric: bool = False,
-    show_resources: bool = False,
-    config: Optional[Dict[str, Any]] = None,
-    seed: int = 0,
-    run_id: Optional[str] = None,
+    history_window: int,
+    show_task: bool,
+    show_metric: bool,
+    show_resources: bool,
+    config: Optional[Dict[str, Any]],
+    seed: int,
+    run_id: Optional[str],
+    model: str,
+    temperature: float,
 ) -> Dict[str, Any]:
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
@@ -137,6 +139,8 @@ def run_toy_tabular(
         show_task=show_task,
         show_metric=show_metric,
         show_resources=show_resources,
+        model=model,
+        temperature=temperature,
     )
     benchmark = ToyTabularBenchmark(bench_config, config or {})
     result = benchmark.run(run_id=run_id)
