@@ -20,8 +20,8 @@ PARAM_BOUNDS = {
 class ToyTabularBenchmark(BaseBenchmark):
     """Toy logistic regression benchmark with agent support."""
 
-    def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
-        super().__init__(config, project_config)
+    def __init__(self, config: BenchmarkConfig):
+        super().__init__(config)
         self.env = ToyTabularEnv()
 
     @property
@@ -131,7 +131,6 @@ def run_toy_tabular(
     show_task: bool,
     show_metric: bool,
     show_resources: bool,
-    config: Optional[Dict[str, Any]],
     seed: int,
     run_id: Optional[str],
     model: str,
@@ -148,7 +147,7 @@ def run_toy_tabular(
         model=model,
         temperature=temperature,
     )
-    benchmark = ToyTabularBenchmark(bench_config, config or {})
+    benchmark = ToyTabularBenchmark(bench_config)
     result = benchmark.run(run_id=run_id)
 
     # Convert to legacy format for compatibility

@@ -139,9 +139,8 @@ class BaseBenchmark(ABC):
     - CONTEXT: ContextBuilder constructs agent-visible information only
     """
 
-    def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: BenchmarkConfig):
         self.config = config
-        self.project_config = project_config or {}
         self.history: List[IterationResult] = []
         # TRACE ONLY: Logger for observability events
         self.logger: Optional[RunLogger] = None

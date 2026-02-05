@@ -5,34 +5,28 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.utils.config import load_config
 from src.utils import logging as trace_logging
 
 
 def parse_benchmark_args(
     description: str,
-    benchmark_config_key: str,
     extra_args: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
-) -> Tuple[argparse.Namespace, Dict[str, Any]]:
+) -> argparse.Namespace:
     """
     Parse common benchmark CLI arguments with optional benchmark-specific arguments.
 
     Args:
         description: Description for the ArgumentParser
-        benchmark_config_key: Key in config.json for benchmark-specific settings (e.g., "toy_bench", "nomad_bench")
         extra_args: Optional list of (arg_name, arg_kwargs) tuples for benchmark-specific arguments.
                     Example: [("--history-window", {"type": int, "help": "..."})]
 
     Returns:
-        Tuple of (parsed_args, config_dict) where:
-        - parsed_args: argparse.Namespace with all parsed arguments
-        - config_dict: Loaded and processed config dictionary
+        Parsed arguments namespace
     """
     parser = argparse.ArgumentParser(description=description)
     
     # Common arguments
-    parser.add_argument("--config", default="config.json", help="Path to the main project config.")
-    parser.add_argument("--num-steps", type=int, help="Override number of tuning steps.")
+    parser.add_argument("--num-steps", type=int, default=3, help="Number of tuning steps (default: 3).")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducibility.")
     parser.add_argument("--output-dir", type=str, help="Custom output directory for traces.")
     parser.add_argument("--run-id", type=str, help="Custom run ID for batch tracking.")
@@ -47,7 +41,7 @@ def parse_benchmark_args(
     parser.add_argument("--show-task", action="store_true", help="Include task description in prompt.")
     parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")
     parser.add_argument("--show-resources", action="store_true", help="Include resource usage (tokens, cost, latency) in prompt.")
-    parser.add_argument("--history-window", type=int, help="Number of history entries to show (0=none).")
+    parser.add_argument("--history-window", type=int, default=5, help="Number of history entries to show (default: 5, 0=none).")
     
     # Add benchmark-specific arguments if provided
     if extra_args:
@@ -59,14 +53,6 @@ def parse_benchmark_args(
     # Override trace output directory if specified
     if args.output_dir:
         trace_logging.TRACES_ROOT = Path(args.output_dir)
-    
-    # Load and process config
-    cfg = load_config(args.config)
-    bench_cfg = cfg.get(benchmark_config_key, {})
-    
-    # Process num_steps with benchmark-specific default
-    default_steps = int(bench_cfg.get("num_steps", 3))
-    args.num_steps = args.num_steps or default_steps
 
-    return args, cfg
+    return args
 

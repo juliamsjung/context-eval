@@ -26,8 +26,8 @@ PARAM_BOUNDS = {
 class NomadBenchmark(BaseBenchmark):
     """NOMAD materials science regression benchmark."""
 
-    def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
-        super().__init__(config, project_config)
+    def __init__(self, config: BenchmarkConfig):
+        super().__init__(config)
         self.env = NomadEnv()
 
     @property
@@ -161,7 +161,6 @@ def run_nomad_bench(
     show_task: bool,
     show_metric: bool,
     show_resources: bool,
-    config: Optional[Dict[str, Any]],
     seed: int,
     run_id: Optional[str],
     model: str,
@@ -178,5 +177,5 @@ def run_nomad_bench(
         model=model,
         temperature=temperature,
     )
-    benchmark = NomadBenchmark(bench_config, config or {})
+    benchmark = NomadBenchmark(bench_config)
     return benchmark.run(run_id=run_id)
