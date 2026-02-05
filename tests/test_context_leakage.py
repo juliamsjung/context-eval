@@ -145,13 +145,15 @@ class TestContextAxes:
         assert axes.history_window == 5
         assert axes.show_task is False
         assert axes.show_metric is False
+        assert axes.show_resources is False
 
     def test_custom_axes(self):
         """Custom axes should be settable."""
-        axes = ContextAxes(history_window=10, show_task=True, show_metric=True)
+        axes = ContextAxes(history_window=10, show_task=True, show_metric=True, show_resources=True)
         assert axes.history_window == 10
         assert axes.show_task is True
         assert axes.show_metric is True
+        assert axes.show_resources is True
 
     def test_negative_history_window_raises_error(self):
         """Negative history_window should raise ValueError."""
@@ -182,6 +184,7 @@ class TestContextBuilder:
             step = 0
             config = {"lr": 0.1}
             metrics = {"accuracy": 0.85}
+            token_usage = None
 
         bundle = builder.build(
             current_config={"lr": 0.2},
@@ -209,6 +212,7 @@ class TestContextBuilder:
                 self.step = step
                 self.config = {"lr": 0.1}
                 self.metrics = {"accuracy": 0.85}
+                self.token_usage = None
 
         history = [FakeResult(i) for i in range(5)]
         bundle = builder.build(
@@ -236,6 +240,7 @@ class TestContextBuilder:
             step = 0
             config = {"lr": 0.1}
             metrics = {"accuracy": 0.85}
+            token_usage = None
 
         bundle = builder.build(
             current_config={"lr": 0.2},
@@ -244,3 +249,189 @@ class TestContextBuilder:
         )
 
         assert bundle.recent_history == []
+
+
+class TestResourceSummaryGating:
+    """Tests for resource summary visibility gating."""
+
+    def test_show_resources_false_excludes_summary(self):
+        """resource_summary should be None when show_resources is False."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_resources=False),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = {
+                "total_tokens": 100,
+                "api_cost": 0.001,
+                "latency_sec": 0.5,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.resource_summary is None
+
+    def test_show_resources_true_includes_summary(self):
+        """resource_summary should be populated when show_resources is True."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_resources=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = {
+                "total_tokens": 100,
+                "api_cost": 0.001,
+                "latency_sec": 0.5,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.resource_summary is not None
+        assert bundle.resource_summary["tokens_used_so_far"] == 100
+        assert bundle.resource_summary["api_cost_so_far"] == 0.001
+        assert bundle.resource_summary["mean_latency_sec"] == 0.5
+
+    def test_resource_summary_aggregates_multiple_entries(self):
+        """resource_summary should aggregate across multiple history entries."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_resources=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            def __init__(self, step, tokens, cost, latency):
+                self.step = step
+                self.config = {"lr": 0.1}
+                self.metrics = {"accuracy": 0.85}
+                self.token_usage = {
+                    "total_tokens": tokens,
+                    "api_cost": cost,
+                    "latency_sec": latency,
+                }
+
+        history = [
+            FakeResult(1, 100, 0.001, 0.5),
+            FakeResult(2, 150, 0.002, 0.6),
+            FakeResult(3, 200, 0.003, 0.7),
+        ]
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=history,
+        )
+
+        assert bundle.resource_summary is not None
+        assert bundle.resource_summary["tokens_used_so_far"] == 450  # 100 + 150 + 200
+        assert bundle.resource_summary["api_cost_so_far"] == 0.006  # 0.001 + 0.002 + 0.003
+        # Mean latency: (0.5 + 0.6 + 0.7) / 3 = 0.6
+        assert bundle.resource_summary["mean_latency_sec"] == 0.6
+
+    def test_resource_summary_handles_missing_token_usage(self):
+        """resource_summary should handle entries without token_usage."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_resources=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResultWithUsage:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = {
+                "total_tokens": 100,
+                "api_cost": 0.001,
+                "latency_sec": 0.5,
+            }
+
+        class FakeResultWithoutUsage:
+            step = 0
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.80}
+            token_usage = None  # Baseline has no token usage
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResultWithoutUsage(), FakeResultWithUsage()],
+        )
+
+        assert bundle.resource_summary is not None
+        assert bundle.resource_summary["tokens_used_so_far"] == 100
+        assert bundle.resource_summary["api_cost_so_far"] == 0.001
+
+    def test_resource_summary_in_to_dict(self):
+        """resource_summary should appear in to_dict() when present."""
+        bundle = ContextBundle(
+            current_config={"lr": 0.1},
+            latest_score=0.85,
+            recent_history=[],
+            resource_summary={
+                "tokens_used_so_far": 100,
+                "api_cost_so_far": 0.001,
+                "mean_latency_sec": 0.5,
+            },
+        )
+        result = bundle.to_dict()
+        assert "resource_summary" in result
+        assert result["resource_summary"]["tokens_used_so_far"] == 100
+
+    def test_resource_summary_not_in_to_dict_when_none(self):
+        """resource_summary should not appear in to_dict() when None."""
+        bundle = ContextBundle(
+            current_config={"lr": 0.1},
+            latest_score=0.85,
+            recent_history=[],
+            resource_summary=None,
+        )
+        result = bundle.to_dict()
+        assert "resource_summary" not in result
+
+    def test_empty_history_returns_zero_resources(self):
+        """resource_summary should return zeros for empty history."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_resources=True),
+            score_extractor=score_extractor,
+        )
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[],
+        )
+
+        assert bundle.resource_summary is not None
+        assert bundle.resource_summary["tokens_used_so_far"] == 0
+        assert bundle.resource_summary["api_cost_so_far"] == 0.0
+        assert bundle.resource_summary["mean_latency_sec"] == 0.0

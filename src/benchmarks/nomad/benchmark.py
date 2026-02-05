@@ -137,6 +137,8 @@ class NomadBenchmark(BaseBenchmark):
             bundle_dict["task_description"] = bundle.task_description
         if bundle.metric_description:
             bundle_dict["metric_description"] = bundle.metric_description
+        if bundle.resource_summary:
+            bundle_dict["resource_summary"] = bundle.resource_summary
 
         return (
             "You are tuning a HistGradientBoostingRegressor."
@@ -154,6 +156,7 @@ def run_nomad_bench(
     history_window: int = DEFAULT_HISTORY_WINDOW,
     show_task: bool = False,
     show_metric: bool = False,
+    show_resources: bool = False,
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
@@ -165,6 +168,7 @@ def run_nomad_bench(
         seed=seed,
         show_task=show_task,
         show_metric=show_metric,
+        show_resources=show_resources,
     )
     benchmark = NomadBenchmark(bench_config, config or {})
     return benchmark.run(run_id=run_id)

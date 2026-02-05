@@ -21,10 +21,12 @@ class ContextAxes:
         history_window: Number of past iterations to include (0 = none)
         show_task: Whether to include task_description.txt content
         show_metric: Whether to include metric_description.txt content
+        show_resources: Whether to include resource usage (tokens, cost, latency)
     """
     history_window: int = 5
     show_task: bool = False
     show_metric: bool = False
+    show_resources: bool = False
 
     def __post_init__(self) -> None:
         """Validate axis values."""

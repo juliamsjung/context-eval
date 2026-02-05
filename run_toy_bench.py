@@ -23,6 +23,7 @@ def main() -> None:
         history_window=history_window,
         show_task=args.show_task,
         show_metric=args.show_metric,
+        show_resources=args.show_resources,
         config=cfg,
         seed=args.seed,
         run_id=args.run_id,

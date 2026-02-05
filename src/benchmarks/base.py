@@ -89,6 +89,7 @@ class BenchmarkConfig:
     seed: int = 0
     show_task: bool = False
     show_metric: bool = False
+    show_resources: bool = False
 
 
 @dataclass
@@ -120,6 +121,7 @@ class BaseBenchmark(ABC):
             history_window=config.history_window,
             show_task=config.show_task,
             show_metric=config.show_metric,
+            show_resources=config.show_resources,
         )
         # Note: _context_builder is initialized lazily after workspace_path is available
         self._context_builder: Optional[ContextBuilder] = None
@@ -290,11 +292,20 @@ class BaseBenchmark(ABC):
         )
         latency = datetime.utcnow().timestamp() - t0
         content = resp.choices[0].message.content or ""
+
+        # TRACE LAYER: Compute cost per call using pricing formulas
+        model = self.project_config.get("model", DEFAULT_MODEL)
+        pricing = MODEL_PRICING.get(model, MODEL_PRICING[DEFAULT_MODEL])
+        input_tokens = resp.usage.prompt_tokens
+        output_tokens = resp.usage.completion_tokens
+        api_cost = (input_tokens * pricing["input"] + output_tokens * pricing["output"]) / 1_000_000
+
         usage = {
-            "input_tokens": resp.usage.prompt_tokens,
-            "output_tokens": resp.usage.completion_tokens,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "total_tokens": resp.usage.total_tokens,
             "latency_sec": latency,
+            "api_cost": round(api_cost, 8),  # Store cost per call for context aggregation
         }
 
         parsed = safe_parse_json(content)
@@ -365,6 +376,7 @@ class BaseBenchmark(ABC):
                 "history_window": self.config.history_window,
                 "show_task": self.config.show_task,
                 "show_metric": self.config.show_metric,
+                "show_resources": self.config.show_resources,
             },
         )
 

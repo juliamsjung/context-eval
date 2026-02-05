@@ -19,6 +19,7 @@ class IterationResultProtocol(Protocol):
     step: int
     config: Dict[str, Any]
     metrics: Dict[str, float]
+    token_usage: Optional[Dict[str, Any]]
 
 
 class ContextBuilder:
@@ -78,6 +79,42 @@ class ContextBuilder:
             return None
         return self._load_artifact("metric_description.txt")
 
+    def _compute_resource_summary(
+        self, history: List[IterationResultProtocol]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        CONTEXT ONLY: Aggregate resource usage from history.
+
+        IMPORTANT: This method only SUMS existing values computed by the trace layer.
+        It NEVER computes costs from pricing formulas - that's the trace layer's job.
+
+        Args:
+            history: Full iteration history with token_usage data
+
+        Returns:
+            Resource summary dict if show_resources is enabled, None otherwise
+        """
+        if not self.axes.show_resources:
+            return None
+
+        total_tokens = 0
+        total_cost = 0.0
+        total_latency = 0.0
+        call_count = 0
+
+        for entry in history:
+            if hasattr(entry, 'token_usage') and entry.token_usage:
+                total_tokens += entry.token_usage.get("total_tokens", 0)
+                total_cost += entry.token_usage.get("api_cost", 0.0)  # Sum pre-computed cost
+                total_latency += entry.token_usage.get("latency_sec", 0.0)
+                call_count += 1
+
+        return {
+            "tokens_used_so_far": total_tokens,
+            "api_cost_so_far": round(total_cost, 6),
+            "mean_latency_sec": round(total_latency / call_count, 3) if call_count > 0 else 0.0,
+        }
+
     def build(
         self,
         current_config: Dict[str, Any],
@@ -121,6 +158,9 @@ class ContextBuilder:
         task_desc = self._get_task_description()
         metric_desc = self._get_metric_description()
 
+        # Compute resource summary if enabled (sums pre-computed costs, no pricing formulas)
+        resource_summary = self._compute_resource_summary(history)
+
         # Construct and validate bundle (validation happens in __post_init__)
         return ContextBundle(
             current_config=current_config,
@@ -128,4 +168,5 @@ class ContextBuilder:
             recent_history=recent_history,
             task_description=task_desc,
             metric_description=metric_desc,
+            resource_summary=resource_summary,
         )

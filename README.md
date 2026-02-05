@@ -16,6 +16,9 @@ python run_toy_bench.py --config config.json --num-steps 3
 
 # NOMAD benchmark (materials science regression)
 python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-metric
+
+# With resource_summary visible to agent
+python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-metric --show-resources
 ```
 
 ---
@@ -149,6 +152,7 @@ Edit root `config.json` to adjust:
 | `--output-dir` | Custom output directory for traces |
 | `--show-task` | Include task description in LLM prompt |
 | `--show-metric` | Include metric description in LLM prompt |
+| `--show-resources` | Include resource_summary (tokens, cost, latency) in LLM prompt |
 | `--history-window` | Number of history entries to include (default: 5, 0=none) |
 
 ## Running Benchmarks
