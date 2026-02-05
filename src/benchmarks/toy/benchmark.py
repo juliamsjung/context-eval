@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
+from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp, _validate_dict_keys_no_trace_fields
 from src.benchmarks.toy.env import ToyTabularEnv
 # CONTEXT ONLY import
 from src.context import ContextBundle
@@ -91,6 +91,12 @@ class ToyTabularBenchmark(BaseBenchmark):
             'C': bundle.current_config.get('C'),
             'max_iter': bundle.current_config.get('max_iter')
         }
+
+        # Validate structures before serialization (checks keys, not values)
+        if __debug__:
+            _validate_dict_keys_no_trace_fields(filtered_config)
+            if bundle.resource_summary:
+                _validate_dict_keys_no_trace_fields(bundle.resource_summary)
 
         # Format history as text lines for toy benchmark style
         if bundle.recent_history:

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
+from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp, _validate_dict_keys_no_trace_fields
 from src.benchmarks.nomad.env import NomadEnv
 # CONTEXT ONLY import
 from src.context import ContextBundle
@@ -139,6 +139,10 @@ class NomadBenchmark(BaseBenchmark):
             bundle_dict["metric_description"] = bundle.metric_description
         if bundle.resource_summary:
             bundle_dict["resource_summary"] = bundle.resource_summary
+
+        # Validate bundle_dict structure before serialization (checks keys, not values)
+        if __debug__:
+            _validate_dict_keys_no_trace_fields(bundle_dict)
 
         return (
             "You are tuning a HistGradientBoostingRegressor."
