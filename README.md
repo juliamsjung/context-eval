@@ -19,6 +19,9 @@ python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-
 
 # With resource_summary visible to agent
 python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-metric --show-resources
+
+# With custom model and temperature
+python run_toy_bench.py --config config.json --num-steps 3 --model gpt-4o --temperature 0.5
 ```
 
 ---
