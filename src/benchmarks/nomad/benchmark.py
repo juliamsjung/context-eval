@@ -160,6 +160,8 @@ def run_nomad_bench(
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0,
 ) -> Dict[str, Any]:
     """Run NOMAD benchmark. Thin wrapper around NomadBenchmark."""
     bench_config = BenchmarkConfig(
@@ -169,6 +171,8 @@ def run_nomad_bench(
         show_task=show_task,
         show_metric=show_metric,
         show_resources=show_resources,
+        model=model,
+        temperature=temperature,
     )
     benchmark = NomadBenchmark(bench_config, config or {})
     return benchmark.run(run_id=run_id)

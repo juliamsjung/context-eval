@@ -37,6 +37,12 @@ def parse_benchmark_args(
     parser.add_argument("--output-dir", type=str, help="Custom output directory for traces.")
     parser.add_argument("--run-id", type=str, help="Custom run ID for batch tracking.")
 
+    # Experimental controls (model, temperature)
+    parser.add_argument("--model", type=str, default="gpt-4o-mini",
+                        help="LLM model to use (default: gpt-4o-mini)")
+    parser.add_argument("--temperature", type=float, default=0,
+                        help="LLM temperature (default: 0)")
+
     # Context visibility flags
     parser.add_argument("--show-task", action="store_true", help="Include task description in prompt.")
     parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")

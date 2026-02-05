@@ -128,6 +128,8 @@ def run_toy_tabular(
     config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
     run_id: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0,
 ) -> Dict[str, Any]:
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
@@ -137,6 +139,8 @@ def run_toy_tabular(
         show_task=show_task,
         show_metric=show_metric,
         show_resources=show_resources,
+        model=model,
+        temperature=temperature,
     )
     benchmark = ToyTabularBenchmark(bench_config, config or {})
     result = benchmark.run(run_id=run_id)
