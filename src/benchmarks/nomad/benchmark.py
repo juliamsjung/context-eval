@@ -11,8 +11,6 @@ from src.benchmarks.nomad.env import NomadEnv
 from src.context import ContextBundle
 
 
-DEFAULT_HISTORY_WINDOW = 5
-
 PARAM_BOUNDS = {
     "learning_rate": (0.01, 0.5),
     "max_depth": (2, 16),

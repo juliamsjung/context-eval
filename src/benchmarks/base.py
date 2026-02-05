@@ -127,7 +127,7 @@ class IterationResult:
     step: int
     config: Dict[str, Any]
     metrics: Dict[str, float]
-    proposal_source: str  # "llm", "agent", "heuristic", "baseline"
+    proposal_source: str  # "llm", "heuristic", "baseline"
     token_usage: Optional[Dict[str, int]] = None
 
 

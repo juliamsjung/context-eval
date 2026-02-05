@@ -36,9 +36,3 @@ class NomadEnv(BaseEnv):
                 raise FileNotFoundError(
                     f"{required} not found. Run scripts/prepare_nomad.py to build the workspace artifacts."
                 )
-
-    def read_context(self) -> Dict[str, Any]:
-        """Read the dataset context file."""
-        if not self.context_path.exists():
-            return {}
-        return json.loads(self.context_path.read_text())

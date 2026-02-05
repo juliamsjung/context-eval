@@ -38,12 +38,6 @@ class LeafEnv(BaseEnv):
                     f"{required} not found. Run scripts/prepare_leaf.py to build the workspace artifacts."
                 )
 
-    def read_context(self) -> Dict[str, Any]:
-        """Read the dataset context file."""
-        if not self.context_path.exists():
-            return {}
-        return json.loads(self.context_path.read_text())
-
     def read_label_mapping(self) -> Dict[str, int]:
         """Read the label mapping (species name -> index)."""
         if not self.label_mapping_path.exists():
