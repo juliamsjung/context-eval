@@ -12,16 +12,16 @@ Inspired by [MLAgentBench](https://arxiv.org/pdf/2310.03302) and [MLEBench](http
 
 ```bash
 # Toy benchmark (logistic regression tuning)
-python run_toy_bench.py --config config.json --num-steps 3
+python run_toy_bench.py --num-steps 3
 
 # NOMAD benchmark (materials science regression)
-python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-metric
+python run_nomad_bench.py --num-steps 3 --show-task --show-metric
 
 # With resource_summary visible to agent
-python run_nomad_bench.py --config config.json --num-steps 3 --show-task --show-metric --show-resources
+python run_nomad_bench.py --num-steps 3 --show-task --show-metric --show-resources
 
 # With custom model and temperature
-python run_toy_bench.py --config config.json --num-steps 3 --model gpt-4o --temperature 0.5
+python run_toy_bench.py --num-steps 3 --model gpt-4o --temperature 0.5
 ```
 
 ---
@@ -138,17 +138,10 @@ Prepared data saved to `src/benchmarks/mercor/workspace/`.
 
 ---
 
-## Configuration (note to author - might have to fix)
-
-Edit root `config.json` to adjust:
-- `model`: LLM model (default: `gpt-4o-mini`)
-- `context_policies`: Configure chunk limits and summary sizes for short/long context modes
-
 ## CLI Options
 
 | Flag | Description |
 |------|-------------|
-| `--config` | Path to config file |
 | `--num-steps` | Number of optimization iterations |
 | `--seed` | Random seed |
 | `--run-id` | Custom run identifier |
@@ -172,19 +165,19 @@ Edit root `config.json` to adjust:
 ### Examples
 
 ```bash
-# Basic run with default context policy
-python run_toy_bench.py --config config.json --num-steps 5
+# Basic run with default settings
+python run_toy_bench.py --num-steps 5
 
 # Full context: task description + metric description + history
-python run_nomad_bench.py --config config.json --num-steps 5 \
+python run_nomad_bench.py --num-steps 5 \
     --show-task --show-metric --history-window 5
 
 # Minimal context: no task/metric descriptions, no history
-python run_nomad_bench.py --config config.json --num-steps 5 \
+python run_nomad_bench.py --num-steps 5 \
     --history-window 0
 
 # Custom run with seed for reproducibility
-python run_nomad_bench.py --config config.json --num-steps 10 \
+python run_nomad_bench.py --num-steps 10 \
     --show-task --show-metric --seed 42 --run-id my-experiment
 ```
 

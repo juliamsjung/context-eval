@@ -5,13 +5,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
+from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp, _validate_dict_keys_no_trace_fields
 from src.benchmarks.nomad.env import NomadEnv
 # CONTEXT ONLY import
 from src.context import ContextBundle
 
-
-DEFAULT_HISTORY_WINDOW = 5
 
 PARAM_BOUNDS = {
     "learning_rate": (0.01, 0.5),
@@ -26,8 +24,8 @@ PARAM_BOUNDS = {
 class NomadBenchmark(BaseBenchmark):
     """NOMAD materials science regression benchmark."""
 
-    def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
-        super().__init__(config, project_config)
+    def __init__(self, config: BenchmarkConfig):
+        super().__init__(config)
         self.env = NomadEnv()
 
     @property
@@ -140,6 +138,10 @@ class NomadBenchmark(BaseBenchmark):
         if bundle.resource_summary:
             bundle_dict["resource_summary"] = bundle.resource_summary
 
+        # Validate bundle_dict structure before serialization (checks keys, not values)
+        if __debug__:
+            _validate_dict_keys_no_trace_fields(bundle_dict)
+
         return (
             "You are tuning a HistGradientBoostingRegressor."
             "Use the structured information below to recommend "
@@ -157,7 +159,6 @@ def run_nomad_bench(
     show_task: bool,
     show_metric: bool,
     show_resources: bool,
-    config: Optional[Dict[str, Any]],
     seed: int,
     run_id: Optional[str],
     model: str,
@@ -174,5 +175,5 @@ def run_nomad_bench(
         model=model,
         temperature=temperature,
     )
-    benchmark = NomadBenchmark(bench_config, config or {})
+    benchmark = NomadBenchmark(bench_config)
     return benchmark.run(run_id=run_id)

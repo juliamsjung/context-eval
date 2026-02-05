@@ -41,6 +41,33 @@ def _clamp(value: float, bounds: tuple[float, float]) -> float:
     return max(low, min(high, value))
 
 
+def _validate_dict_keys_no_trace_fields(data: Any, path: str = "root") -> None:
+    """
+    Recursively validate that no trace-only field names appear as dictionary keys.
+    
+    This function checks dictionary keys (not values) to catch actual field leaks
+    while allowing natural language text in values that may contain these words.
+    
+    Args:
+        data: The data structure to validate (dict, list, or primitive)
+        path: Current path in the structure for error messages
+        
+    Raises:
+        AssertionError: If any trace-only field name appears as a dictionary key
+    """
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key in TRACE_ONLY_FIELDS:
+                raise AssertionError(
+                    f"Trace field '{key}' leaked to prompt structure at path '{path}'"
+                )
+            # Recursively check nested structures
+            _validate_dict_keys_no_trace_fields(value, f"{path}.{key}")
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            _validate_dict_keys_no_trace_fields(item, f"{path}[{i}]")
+
+
 class BaseEnv(ABC):
     """Abstract base class for benchmark environments."""
 
@@ -100,7 +127,7 @@ class IterationResult:
     step: int
     config: Dict[str, Any]
     metrics: Dict[str, float]
-    proposal_source: str  # "llm", "agent", "heuristic", "baseline"
+    proposal_source: str  # "llm", "heuristic", "baseline"
     token_usage: Optional[Dict[str, int]] = None
 
 
@@ -112,9 +139,8 @@ class BaseBenchmark(ABC):
     - CONTEXT: ContextBuilder constructs agent-visible information only
     """
 
-    def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: BenchmarkConfig):
         self.config = config
-        self.project_config = project_config or {}
         self.history: List[IterationResult] = []
         # TRACE ONLY: Logger for observability events
         self.logger: Optional[RunLogger] = None
@@ -273,13 +299,13 @@ class BaseBenchmark(ABC):
         # CONTEXT ONLY: Build validated context bundle for agent
         bundle = self._build_context_bundle(current_config, last_metrics, history)
 
+        # Validate bundle structure before prompt building (checks keys, not values)
+        if __debug__:
+            bundle_dict = bundle.to_dict()
+            _validate_dict_keys_no_trace_fields(bundle_dict)
+
         system_prompt = self._get_llm_system_prompt()
         user_prompt = self._build_llm_user_prompt(bundle)
-
-        # Debug assertion: verify no trace fields leaked into prompt
-        if __debug__:
-            for field in TRACE_ONLY_FIELDS:
-                assert field not in user_prompt, f"Trace field '{field}' leaked to prompt"
 
         client = OpenAI(api_key=api_key)
         t0 = datetime.utcnow().timestamp()

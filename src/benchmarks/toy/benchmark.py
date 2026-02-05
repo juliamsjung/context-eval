@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp
+from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp, _validate_dict_keys_no_trace_fields
 from src.benchmarks.toy.env import ToyTabularEnv
 # CONTEXT ONLY import
 from src.context import ContextBundle
@@ -20,8 +20,8 @@ PARAM_BOUNDS = {
 class ToyTabularBenchmark(BaseBenchmark):
     """Toy logistic regression benchmark with agent support."""
 
-    def __init__(self, config: BenchmarkConfig, project_config: Optional[Dict[str, Any]] = None):
-        super().__init__(config, project_config)
+    def __init__(self, config: BenchmarkConfig):
+        super().__init__(config)
         self.env = ToyTabularEnv()
 
     @property
@@ -92,6 +92,12 @@ class ToyTabularBenchmark(BaseBenchmark):
             'max_iter': bundle.current_config.get('max_iter')
         }
 
+        # Validate structures before serialization (checks keys, not values)
+        if __debug__:
+            _validate_dict_keys_no_trace_fields(filtered_config)
+            if bundle.resource_summary:
+                _validate_dict_keys_no_trace_fields(bundle.resource_summary)
+
         # Format history as text lines for toy benchmark style
         if bundle.recent_history:
             history_lines = "\n".join(
@@ -125,7 +131,6 @@ def run_toy_tabular(
     show_task: bool,
     show_metric: bool,
     show_resources: bool,
-    config: Optional[Dict[str, Any]],
     seed: int,
     run_id: Optional[str],
     model: str,
@@ -142,7 +147,7 @@ def run_toy_tabular(
         model=model,
         temperature=temperature,
     )
-    benchmark = ToyTabularBenchmark(bench_config, config or {})
+    benchmark = ToyTabularBenchmark(bench_config)
     result = benchmark.run(run_id=run_id)
 
     # Convert to legacy format for compatibility
