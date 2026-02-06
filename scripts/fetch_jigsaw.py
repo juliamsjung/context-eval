@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Download the Mercor AI Detection Kaggle dataset into kaggle-data/mercor/raw.
+Download the Jigsaw Toxic Comment Classification dataset into kaggle-data/jigsaw/raw.
 
 Usage:
-    python scripts/fetch_mercor.py
+    python scripts/fetch_jigsaw.py
 """
 from __future__ import annotations
 
@@ -30,20 +30,19 @@ def _write_stamp(dest: Path, dataset: str) -> None:
 
 def _local_exists(path: Path) -> bool:
     train = path / "train.csv"
-    test = path / "test.csv"
-    return train.exists() and test.exists()
+    return train.exists()
 
 
 def _copy_from_source(source: Path, dest: Path) -> None:
-    for name in ("train.csv", "test.csv", "sample_submission.csv"):
+    for name in ("train.csv", "test.csv", "test_labels.csv", "sample_submission.csv"):
         src = source / name
         if not src.exists():
-            if name == "sample_submission.csv":
-                continue  # Optional file
+            if name in ("test_labels.csv", "sample_submission.csv"):
+                continue  # Optional files
             raise FileNotFoundError(f"Missing {src}; populate your local mirror first.")
         shutil.copy2(src, dest / name)
     _write_stamp(dest, f"local:{source}")
-    print(f"[fetch-mercor] Copied local files from {source} into {dest}")
+    print(f"[fetch-jigsaw] Copied local files from {source} into {dest}")
 
 
 def _download_from_kaggle(dataset: str, target_dir: Path, filename: str | None, unzip: bool) -> None:
@@ -56,41 +55,41 @@ def _download_from_kaggle(dataset: str, target_dir: Path, filename: str | None, 
     if is_competition:
         slug = dataset.split("/", 1)[1]
         if filename:
-            print(f"[fetch-mercor] Downloading competition file {filename} from {slug}")
+            print(f"[fetch-jigsaw] Downloading competition file {filename} from {slug}")
             api.competition_download_file(slug, filename, path=str(target_dir), quiet=False)
         else:
-            print(f"[fetch-mercor] Downloading competition bundle {slug} to {target_dir}")
+            print(f"[fetch-jigsaw] Downloading competition bundle {slug} to {target_dir}")
             api.competition_download_files(slug, path=str(target_dir), quiet=False)
     else:
         if filename:
-            print(f"[fetch-mercor] Downloading dataset file {filename} from {dataset}")
+            print(f"[fetch-jigsaw] Downloading dataset file {filename} from {dataset}")
             api.dataset_download_file(dataset, filename, path=str(target_dir), quiet=False)
         else:
-            print(f"[fetch-mercor] Downloading dataset {dataset} to {target_dir}")
+            print(f"[fetch-jigsaw] Downloading dataset {dataset} to {target_dir}")
             api.dataset_download_files(dataset, path=str(target_dir), quiet=False, unzip=unzip)
 
     if not unzip and not is_competition:
-        print("[fetch-mercor] Skipped auto-unzip per --no-unzip flag.")
+        print("[fetch-jigsaw] Skipped auto-unzip per --no-unzip flag.")
 
     _write_stamp(target_dir, dataset)
-    print(f"[fetch-mercor] Dataset ready in {target_dir}")
+    print(f"[fetch-jigsaw] Dataset ready in {target_dir}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fetch or stage the Mercor AI Detection dataset.")
+    parser = argparse.ArgumentParser(description="Fetch or stage the Jigsaw Toxic Comment dataset.")
     parser.add_argument(
         "--dataset",
-        default="competitions/mercor-ai-detection",
+        default="competitions/jigsaw-toxic-comment-classification-challenge",
         help="Kaggle slug (use competitions/<slug> for competition files).",
     )
     parser.add_argument(
         "--target-dir",
-        default="kaggle-data/mercor/raw",
+        default="kaggle-data/jigsaw/raw",
         help="Directory where raw files should reside.",
     )
     parser.add_argument(
         "--local-source",
-        help="Optional path containing manually downloaded train/test CSVs to copy instead of hitting Kaggle.",
+        help="Optional path containing manually downloaded CSVs to copy instead of hitting Kaggle.",
     )
     parser.add_argument(
         "--force",
@@ -112,14 +111,14 @@ def main() -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     if _local_exists(target_dir) and not args.force:
-        print(f"[fetch-mercor] train.csv/test.csv already present in {target_dir}. Use --force to overwrite.")
+        print(f"[fetch-jigsaw] train.csv already present in {target_dir}. Use --force to overwrite.")
         return
 
     if args.local_source:
         source = Path(args.local_source).expanduser().resolve()
         if not _local_exists(source):
             raise FileNotFoundError(
-                f"Local source {source} missing train.csv/test.csv. Populate it first."
+                f"Local source {source} missing train.csv. Populate it first."
             )
         _copy_from_source(source, target_dir)
         return
@@ -131,5 +130,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:  # pragma: no cover
-        print(f"[fetch-mercor] Error: {exc}", file=sys.stderr)
+        print(f"[fetch-jigsaw] Error: {exc}", file=sys.stderr)
         sys.exit(1)
