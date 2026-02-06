@@ -10,7 +10,7 @@ set -euo pipefail
 
 PYTHON="${PYTHON:-python}"
 NUM_STEPS=5
-EXPERIMENT_NAME="toy_context_axes"
+EXPERIMENT_NAME="toy"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 OUTPUT_DIR="traces/${EXPERIMENT_NAME}/${TIMESTAMP}"
 TOTAL=48
