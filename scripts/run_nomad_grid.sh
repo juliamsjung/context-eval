@@ -10,7 +10,9 @@ set -euo pipefail
 
 PYTHON="${PYTHON:-python}"
 NUM_STEPS=20
-OUTPUT_DIR="traces"
+EXPERIMENT_NAME="nomad_context_axes"
+TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+OUTPUT_DIR="traces/${EXPERIMENT_NAME}/${TIMESTAMP}"
 TOTAL=48
 DRY_RUN=false
 FAILED_CONFIGS=()
@@ -21,6 +23,29 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
+
+# Generate experiment README
+cat > "$OUTPUT_DIR/README.md" << EOF
+# NOMAD - Context Axes Experiment
+
+Timestamp (UTC): $TIMESTAMP
+
+Benchmark: Materials science regression (bandgap/formation energy)
+
+Axes varied:
+- history_window: [0, 5]
+- show_task: [false, true]
+- show_metric: [false, true]
+- show_resources: [false, true]
+
+Fixed:
+- model = gpt-4o-mini
+- temperature = 0
+- steps = $NUM_STEPS
+- seeds = [0, 1, 2]
+
+Total runs: $TOTAL
+EOF
 
 count=0
 for history_window in 0 5; do
