@@ -73,6 +73,7 @@ We use Kaggle datasets as data sources. Benchmarks run **offline** using prepare
 3. **Join the competitions** (accept rules on each page):
    - [NOMAD 2018](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) - Click "Late Submission"
    - [Leaf Classification](https://www.kaggle.com/c/leaf-classification) - Click "Late Submission"
+   - [Jigsaw Toxic Comment](https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge) - Click "Late Submission"
 
 ---
 
@@ -115,6 +116,26 @@ python3 scripts/prepare_leaf.py --float32
 ```
 
 Prepared data saved to `src/benchmarks/leaf/workspace/`.
+
+---
+
+### Jigsaw Dataset (Toxic Comment Classification - Text Data)
+
+```bash
+# 1. Fetch from Kaggle
+python3 scripts/fetch_jigsaw.py
+
+# 2. Unzip the nested archives
+cd kaggle-data/jigsaw/raw
+unzip -o jigsaw-toxic-comment-classification-challenge.zip
+unzip -o train.csv.zip
+cd ../../..
+
+# 3. Prepare offline artifacts
+python3 scripts/prepare_jigsaw.py
+```
+
+Prepared data saved to `src/benchmarks/jigsaw/workspace/`.
 
 ---
 
@@ -169,14 +190,17 @@ python run_nomad_bench.py --num-steps 10 \
 scripts/                # Data fetching and preparation
 ├── fetch_nomad.py
 ├── fetch_leaf.py
+├── fetch_jigsaw.py
 ├── prepare_nomad.py
-└── prepare_leaf.py
+├── prepare_leaf.py
+└── prepare_jigsaw.py
 
 src/
 ├── benchmarks/         # BaseBenchmark and task-specific implementations
 │   ├── base.py
 │   ├── nomad/          # NOMAD benchmark
 │   ├── leaf/           # Leaf benchmark (WIP)
+│   ├── jigsaw/         # Jigsaw benchmark (WIP)
 │   └── toy/            # Toy benchmark
 ├── context/            # Agent-visible context construction and policies
 │   ├── ContextBundle

@@ -78,6 +78,20 @@ src/benchmarks/leaf/workspace/prepared_meta.json
 src/benchmarks/leaf/workspace/label_mapping.json
 src/benchmarks/leaf/workspace/results.json
 
+# Kaggle Jigsaw data (downloaded locally)
+kaggle-data/jigsaw/raw/
+kaggle-data/jigsaw/processed/
+
+# Jigsaw bench artifacts
+src/benchmarks/jigsaw/workspace/run_config.json
+src/benchmarks/jigsaw/workspace/ids.json
+src/benchmarks/jigsaw/workspace/texts.json
+src/benchmarks/jigsaw/workspace/labels.npy
+src/benchmarks/jigsaw/workspace/dataset_context.json
+src/benchmarks/jigsaw/workspace/prepared_meta.json
+src/benchmarks/jigsaw/workspace/label_mapping.json
+src/benchmarks/jigsaw/workspace/results.json
+
 # New directories for experiment outputs
 outputs/
 data/
