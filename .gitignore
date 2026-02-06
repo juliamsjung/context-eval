@@ -78,20 +78,6 @@ src/benchmarks/leaf/workspace/prepared_meta.json
 src/benchmarks/leaf/workspace/label_mapping.json
 src/benchmarks/leaf/workspace/results.json
 
-# Kaggle Mercor data (downloaded locally)
-kaggle-data/mercor/raw/
-kaggle-data/mercor/processed/
-
-# Mercor bench artifacts
-src/benchmarks/mercor/workspace/run_config.json
-src/benchmarks/mercor/workspace/ids.npy
-src/benchmarks/mercor/workspace/topics.npy
-src/benchmarks/mercor/workspace/answers.npy
-src/benchmarks/mercor/workspace/labels.npy
-src/benchmarks/mercor/workspace/dataset_context.json
-src/benchmarks/mercor/workspace/prepared_meta.json
-src/benchmarks/mercor/workspace/results.json
-
 # New directories for experiment outputs
 outputs/
 data/
