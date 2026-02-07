@@ -6,3 +6,9 @@ scikit-learn>=1.3.0
 
 # Kaggle data fetching (optional - only needed for downloading datasets)
 kaggle>=1.5.0
+
+# Analysis and visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+tqdm>=4.65.0
+jupyter>=1.0.0

@@ -95,3 +95,11 @@ src/benchmarks/jigsaw/workspace/results.json
 # New directories for experiment outputs
 outputs/
 data/
+
+# Experiment analysis (local only)
+experiments/
+
+# Generated plots (analysis artifacts)
+*.png
+*.pdf
+*.svg
