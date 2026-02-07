@@ -22,10 +22,11 @@ if [[ "${1:-}" == "--dry-run" ]]; then
     DRY_RUN=true
 fi
 
-mkdir -p "$OUTPUT_DIR"
+if ! $DRY_RUN; then
+    mkdir -p "$OUTPUT_DIR"
 
-# Generate experiment README
-cat > "$OUTPUT_DIR/README.md" << EOF
+    # Generate experiment README
+    cat > "$OUTPUT_DIR/README.md" << EOF
 # Toy - Context Axes Experiment
 
 Timestamp (UTC): $TIMESTAMP
@@ -46,6 +47,7 @@ Fixed:
 
 Total runs: $TOTAL
 EOF
+fi
 
 count=0
 for history_window in 0 5; do
