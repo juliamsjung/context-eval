@@ -184,16 +184,36 @@ python run_nomad_bench.py --num-steps 10 \
 
 ---
 
+## Running Experiment Grids
+
+Run full experiment grids across all context axis combinations:
+
+```bash
+# Preview commands without running (dry-run)
+./scripts/run_toy_grid.sh --dry-run
+./scripts/run_nomad_grid.sh --dry-run
+
+# Run full grid (48 runs: 2 history_windows × 2³ boolean axes × 3 seeds)
+./scripts/run_toy_grid.sh
+./scripts/run_nomad_grid.sh
+```
+
+Results are saved to `traces/{benchmark}/{timestamp}/` with a README summarizing the experiment configuration.
+
+---
+
 ## Project Structure
 
 ```
-scripts/                # Data fetching and preparation
+scripts/                # Data fetching, preparation, and experiment grids
 ├── fetch_nomad.py
 ├── fetch_leaf.py
 ├── fetch_jigsaw.py
 ├── prepare_nomad.py
 ├── prepare_leaf.py
-└── prepare_jigsaw.py
+├── prepare_jigsaw.py
+├── run_toy_grid.sh     # Run full toy benchmark experiment grid
+└── run_nomad_grid.sh   # Run full NOMAD benchmark experiment grid
 
 src/
 ├── benchmarks/         # BaseBenchmark and task-specific implementations
@@ -211,7 +231,8 @@ src/
 │   └── TRACE_ONLY_FIELDS
 └── utils/              # CLI utilities, configuration helpers
 
+experiments/            # Analysis utilities for experiment results
 kaggle-data/            # Raw Kaggle downloads (gitignored)
-traces/                 # Output JSONL traces
+traces/                 # Output JSONL traces (timestamped subdirectories)
 ```
 
