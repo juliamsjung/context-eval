@@ -135,6 +135,7 @@ def run_toy_tabular(
     run_id: Optional[str],
     model: str,
     temperature: float,
+    debug_show_prompt: bool = False,
 ) -> Dict[str, Any]:
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
@@ -146,6 +147,7 @@ def run_toy_tabular(
         show_resources=show_resources,
         model=model,
         temperature=temperature,
+        debug_show_prompt=debug_show_prompt,
     )
     benchmark = ToyTabularBenchmark(bench_config)
     result = benchmark.run(run_id=run_id)

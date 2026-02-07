@@ -23,6 +23,7 @@ def main() -> None:
         run_id=args.run_id,
         model=args.model,
         temperature=args.temperature,
+        debug_show_prompt=args.debug_show_prompt,
     )
 
     print(json.dumps(results, indent=2))

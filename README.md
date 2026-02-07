@@ -1,4 +1,4 @@
-# DSC180A-Q1Project
+# context-eval
 
 ## Overview
 
@@ -141,18 +141,32 @@ Prepared data saved to `src/benchmarks/jigsaw/workspace/`.
 
 ## CLI Options
 
-| Flag | Description |
-|------|-------------|
-| `--num-steps` | Number of optimization iterations |
-| `--seed` | Random seed |
-| `--run-id` | Custom run identifier |
-| `--output-dir` | Custom output directory for traces |
-| `--show-task` | Include task description in LLM prompt |
-| `--show-metric` | Include metric description in LLM prompt |
-| `--show-resources` | Include resource_summary (tokens, cost, latency) in LLM prompt |
-| `--history-window` | Number of history entries to include (default: 5, 0=none) |
-| `--model` | LLM model to use (default: gpt-4o-mini) |
-| `--temperature` | LLM temperature setting (default: 0) |
+### Context Axes
+These flags control what information the LLM agent sees:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--show-task` | off | Include task description in LLM prompt |
+| `--show-metric` | off | Include metric description in LLM prompt |
+| `--show-resources` | off | Include resource usage (tokens, cost, latency) in LLM prompt |
+| `--history-window` | 5 | Number of history entries to include (0=none) |
+
+### Experiment Settings
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--num-steps` | 3 | Number of optimization iterations |
+| `--seed` | 0 | Random seed for reproducibility |
+| `--run-id` | auto | Custom run identifier |
+| `--output-dir` | `traces/` | Custom output directory for traces |
+| `--model` | gpt-4o-mini | LLM model to use |
+| `--temperature` | 0 | LLM temperature setting |
+
+### Developer Tools
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
 
 ## Running Benchmarks
 

@@ -163,6 +163,7 @@ def run_nomad_bench(
     run_id: Optional[str],
     model: str,
     temperature: float,
+    debug_show_prompt: bool = False,
 ) -> Dict[str, Any]:
     """Run NOMAD benchmark. Thin wrapper around NomadBenchmark."""
     bench_config = BenchmarkConfig(
@@ -174,6 +175,7 @@ def run_nomad_bench(
         show_resources=show_resources,
         model=model,
         temperature=temperature,
+        debug_show_prompt=debug_show_prompt,
     )
     benchmark = NomadBenchmark(bench_config)
     return benchmark.run(run_id=run_id)
