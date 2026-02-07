@@ -231,7 +231,6 @@ src/
 │   └── TRACE_ONLY_FIELDS
 └── utils/              # CLI utilities, configuration helpers
 
-experiments/            # Analysis utilities for experiment results
 kaggle-data/            # Raw Kaggle downloads (gitignored)
 traces/                 # Output JSONL traces (timestamped subdirectories)
 ```

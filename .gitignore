@@ -96,9 +96,8 @@ src/benchmarks/jigsaw/workspace/results.json
 outputs/
 data/
 
-# Experiment analysis outputs
-experiments/output/
-experiments/figures/
+# Experiment analysis (local only)
+experiments/
 
 # Generated plots (analysis artifacts)
 *.png
