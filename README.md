@@ -204,12 +204,12 @@ Run full experiment grids across all context axis combinations:
 
 ```bash
 # Preview commands without running (dry-run)
-./scripts/run_toy_grid.sh --dry-run
-./scripts/run_nomad_grid.sh --dry-run
+./scripts/run_grid.sh toy --dry-run
+./scripts/run_grid.sh nomad --dry-run
 
 # Run full grid (48 runs: 2 history_windows × 2³ boolean axes × 3 seeds)
-./scripts/run_toy_grid.sh
-./scripts/run_nomad_grid.sh
+./scripts/run_grid.sh toy
+./scripts/run_grid.sh nomad --num-steps 20
 ```
 
 Results are saved to `traces/{benchmark}/{timestamp}/` with a README summarizing the experiment configuration.
@@ -226,8 +226,7 @@ scripts/                # Data fetching, preparation, and experiment grids
 ├── prepare_nomad.py
 ├── prepare_leaf.py
 ├── prepare_jigsaw.py
-├── run_toy_grid.sh     # Run full toy benchmark experiment grid
-└── run_nomad_grid.sh   # Run full NOMAD benchmark experiment grid
+└── run_grid.sh         # Run experiment grid for any benchmark
 
 src/
 ├── benchmarks/         # BaseBenchmark and task-specific implementations
