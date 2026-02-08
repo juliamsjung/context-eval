@@ -2,9 +2,7 @@
 
 ## Overview
 
-Evaluating how context policies shape the reliability and efficiency of LLM agents that design, run, and interpret ML experiments.
-
-Inspired by [MLAgentBench](https://arxiv.org/pdf/2310.03302) and [MLEBench](https://arxiv.org/pdf/2410.07095).
+ContextEval is a benchmarking framework that isolates and studies the causal effects of context visibility on LLM agent behavior in iterative machine learning workflows, without modifying model architecture or prompt structure.
 
 ![Architecture](figs/new_architecture.png)
 
