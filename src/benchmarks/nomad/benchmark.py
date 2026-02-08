@@ -135,7 +135,7 @@ class NomadBenchmark(BaseBenchmark):
         if bundle.recent_history:
             history_lines = "\n".join(
                 f"- step {e['step']}: score={e['score']:.4f}, "
-                + ", ".join(f"{k}={v}" for k, v in e['config'].items())
+                + ", ".join(f"{k}={v}" for k, v in e['config'].items() if k in PARAM_BOUNDS)
                 for e in bundle.recent_history
             )
         else:
