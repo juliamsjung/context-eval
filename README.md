@@ -165,3 +165,13 @@ These flags control what information the LLM agent sees:
 | `--verbose` | off | Enable step-by-step logging |
 | `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
 
+## Running Benchmarks
+
+### Available Benchmarks
+
+| Script | Dataset | Task Type |
+|--------|---------|-----------|
+| `run_toy_bench.py` | Synthetic | Logistic regression tuning |
+| `run_nomad_bench.py` | NOMAD 2018 | Materials science regression |
+| `run_jigsaw_bench.py` | Jigsaw Toxic Comments | Multi-label text classification |
+

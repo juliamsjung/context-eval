@@ -1,9 +1,9 @@
 {
     "random_seed": 42,
     "test_size": 0.2,
-    "max_length": 256,
-    "batch_size": 32,
-    "learning_rate": 2e-5,
-    "num_epochs": 3,
-    "model_name": "bert-base-uncased"
+    "max_features": 10000,
+    "ngram_max": 2,
+    "min_df": 5,
+    "C": 1.0,
+    "max_iter": 100
 }
