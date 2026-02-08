@@ -98,7 +98,7 @@ class ToyTabularBenchmark(BaseBenchmark):
             if bundle.resource_summary:
                 _validate_dict_keys_no_trace_fields(bundle.resource_summary)
 
-        # Format history as text lines for toy benchmark style
+        # Format history as text lines
         if bundle.recent_history:
             history_lines = "\n".join(
                 f"- step {e['step']}: score={e['score']:.4f}, C={e['config'].get('C')}, max_iter={e['config'].get('max_iter')}"
@@ -107,18 +107,18 @@ class ToyTabularBenchmark(BaseBenchmark):
         else:
             history_lines = "- baseline only"
 
-        prompt = f"You are adjusting hyperparameters for logistic regression.\n"
-        prompt += f"Current config:\n{json.dumps(filtered_config, indent=2)}\n\n"
-        prompt += f"Latest score: {bundle.latest_score:.4f}\n\n"
-        prompt += f"History:\n{history_lines}\n\n"
+        prompt = "You are adjusting hyperparameters for logistic regression.\n\n"
+        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
+        prompt += f"### Latest Score\n{bundle.latest_score:.4f}\n\n"
+        prompt += f"### History\n{history_lines}\n\n"
 
-        # Add context if available
+        # Add context sections if available (using markdown headers)
         if bundle.task_description:
-            prompt += f"Task:\n{bundle.task_description}\n\n"
+            prompt += f"### Task Description\n{bundle.task_description}\n\n"
         if bundle.metric_description:
-            prompt += f"Metric:\n{bundle.metric_description}\n\n"
+            prompt += f"### Evaluation Metric\n{bundle.metric_description}\n\n"
         if bundle.resource_summary:
-            prompt += f"Resources used so far:\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
+            prompt += f"### Resource Usage\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
 
         prompt += "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
         return prompt
@@ -135,6 +135,7 @@ def run_toy_tabular(
     run_id: Optional[str],
     model: str,
     temperature: float,
+    debug_show_prompt: bool = False,
 ) -> Dict[str, Any]:
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
@@ -146,6 +147,7 @@ def run_toy_tabular(
         show_resources=show_resources,
         model=model,
         temperature=temperature,
+        debug_show_prompt=debug_show_prompt,
     )
     benchmark = ToyTabularBenchmark(bench_config)
     result = benchmark.run(run_id=run_id)

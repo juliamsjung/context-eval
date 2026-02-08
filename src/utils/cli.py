@@ -39,7 +39,10 @@ def parse_benchmark_args(
     parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")
     parser.add_argument("--show-resources", action="store_true", help="Include resource usage (tokens, cost, latency) in prompt.")
     parser.add_argument("--history-window", type=int, default=5, help="Number of history entries to show (default: 5, 0=none).")
-    
+
+    # Developer tools
+    parser.add_argument("--debug-show-prompt", action="store_true", help="Print the LLM prompt for debugging.")
+
     args = parser.parse_args()
     
     # Override trace output directory if specified

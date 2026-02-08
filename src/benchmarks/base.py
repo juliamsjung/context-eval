@@ -119,6 +119,7 @@ class BenchmarkConfig:
     show_resources: bool = False
     model: str = "gpt-4o-mini"
     temperature: float = 0
+    debug_show_prompt: bool = False
 
 
 @dataclass
@@ -306,6 +307,11 @@ class BaseBenchmark(ABC):
 
         system_prompt = self._get_llm_system_prompt()
         user_prompt = self._build_llm_user_prompt(bundle)
+
+        if self.config.debug_show_prompt:
+            print("\n[DEBUG] ==== AGENT PROMPT BEGIN ====")
+            print(user_prompt)
+            print("[DEBUG] ==== AGENT PROMPT END ====\n")
 
         client = OpenAI(api_key=api_key)
         t0 = datetime.utcnow().timestamp()
