@@ -79,7 +79,7 @@ if ! $DRY_RUN; then
 
     # Generate experiment README
     cat > "$OUTPUT_DIR/README.md" << EOF
-# ${BENCHMARK^} - Context Axes Experiment
+# $BENCHMARK - Context Axes Experiment
 
 Timestamp (UTC): $TIMESTAMP
 
