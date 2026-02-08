@@ -2,27 +2,24 @@
 
 ## Overview
 
-Evaluating how context policies shape the reliability and efficiency of LLM agents that design, run, and interpret ML experiments.
-
-Inspired by [MLAgentBench](https://arxiv.org/pdf/2310.03302) and [MLEBench](https://arxiv.org/pdf/2410.07095).
+ContextEval is a benchmarking framework that isolates and studies the causal effects of context visibility on LLM agent behavior in iterative machine learning workflows, without modifying model architecture or prompt structure.
 
 ![Architecture](figs/new_architecture.png)
 
 ## Quick Start
 
 ```bash
-# Toy benchmark (logistic regression tuning)
-python run_toy_bench.py --num-steps 3
+# Single benchmark runs
+python run_toy_bench.py --num-steps 5
+python run_nomad_bench.py --num-steps 5 --show-task --show-metric
 
-# NOMAD benchmark (materials science regression)
-python run_nomad_bench.py --num-steps 3 --show-task --show-metric
-
-# With resource_summary visible to agent
-python run_nomad_bench.py --num-steps 3 --show-task --show-metric --show-resources
-
-# With custom model and temperature
-python run_toy_bench.py --num-steps 3 --model gpt-4o --temperature 0.5
+# Experiment grids (48 runs across all context axis combinations)
+./scripts/run_grid.sh toy --dry-run    # preview commands
+./scripts/run_grid.sh toy              # run full grid
+./scripts/run_grid.sh nomad
 ```
+
+Results saved to `traces/{benchmark}/{timestamp}/`.
 
 ---
 
@@ -32,7 +29,7 @@ python run_toy_bench.py --num-steps 3 --model gpt-4o --temperature 0.5
 
 ```bash
 git clone <repo-url>
-cd DSC180A-Q1Project
+cd context-eval
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -158,7 +155,6 @@ These flags control what information the LLM agent sees:
 | `--num-steps` | 3 | Number of optimization iterations |
 | `--seed` | 0 | Random seed for reproducibility |
 | `--run-id` | auto | Custom run identifier |
-| `--output-dir` | `traces/` | Custom output directory for traces |
 | `--model` | gpt-4o-mini | LLM model to use |
 | `--temperature` | 0 | LLM temperature setting |
 
@@ -166,85 +162,6 @@ These flags control what information the LLM agent sees:
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--verbose` | off | Enable step-by-step logging |
 | `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
-
-## Running Benchmarks
-
-### Available Benchmarks
-
-| Script | Dataset | Task Type |
-|--------|---------|-----------|
-| `run_toy_bench.py` | Synthetic | Logistic regression tuning |
-| `run_nomad_bench.py` | NOMAD 2018 | Materials science regression |
-
-### Examples
-
-```bash
-# Basic run with default settings
-python run_toy_bench.py --num-steps 5
-
-# Full context: task description + metric description + history
-python run_nomad_bench.py --num-steps 5 \
-    --show-task --show-metric --history-window 5
-
-# Minimal context: no task/metric descriptions, no history
-python run_nomad_bench.py --num-steps 5 \
-    --history-window 0
-
-# Custom run with seed for reproducibility
-python run_nomad_bench.py --num-steps 10 \
-    --show-task --show-metric --seed 42 --run-id my-experiment
-```
-
----
-
-## Running Experiment Grids
-
-Run full experiment grids across all context axis combinations:
-
-```bash
-# Preview commands without running (dry-run)
-./scripts/run_grid.sh toy --dry-run
-./scripts/run_grid.sh nomad --dry-run
-
-# Run full grid (48 runs: 2 history_windows × 2³ boolean axes × 3 seeds)
-./scripts/run_grid.sh toy
-./scripts/run_grid.sh nomad --num-steps 20
-```
-
-Results are saved to `traces/{benchmark}/{timestamp}/` with a README summarizing the experiment configuration.
-
----
-
-## Project Structure
-
-```
-scripts/                # Data fetching, preparation, and experiment grids
-├── fetch_nomad.py
-├── fetch_leaf.py
-├── fetch_jigsaw.py
-├── prepare_nomad.py
-├── prepare_leaf.py
-├── prepare_jigsaw.py
-└── run_grid.sh         # Run experiment grid for any benchmark
-
-src/
-├── benchmarks/         # BaseBenchmark and task-specific implementations
-│   ├── base.py
-│   ├── nomad/          # NOMAD benchmark
-│   ├── leaf/           # Leaf benchmark (WIP)
-│   ├── jigsaw/         # Jigsaw benchmark (WIP)
-│   └── toy/            # Toy benchmark
-├── context/            # Agent-visible context construction and policies
-│   ├── ContextBundle
-│   ├── ContextAxes
-│   └── ContextBuilder
-├── trace/              # Observability layer (RunLogger, JSONL trace schema)
-│   ├── RunLogger
-│   └── TRACE_ONLY_FIELDS
-└── utils/              # CLI utilities, configuration helpers
-
-kaggle-data/            # Raw Kaggle downloads (gitignored)
-traces/                 # Output JSONL traces (timestamped subdirectories)
-```
 

@@ -175,7 +175,7 @@ def start_run(
     """
     Factory to create a RunLogger for a single run.
 
-    - task_id: logical task name (e.g. 'toy_tabular', 'nomad')
+    - task_id: logical task name (e.g. 'toy', 'nomad')
     - dataset_id: dataset name (often same as task_id, can differ for shared datasets)
     - agent_id: model/agent identifier (e.g. 'gpt-4.1', 'gpt-5.1', 'baseline_rf')
     - run_id: optional explicit run_id; otherwise auto-generated from task_id + timestamp

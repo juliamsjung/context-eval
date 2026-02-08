@@ -8,6 +8,9 @@
 
 set -euo pipefail
 
+# Exit on Ctrl+C
+trap 'echo -e "\nInterrupted. Exiting..."; exit 130' INT
+
 # Show usage
 usage() {
     echo "Usage: $0 <benchmark> [--num-steps N] [--dry-run]"
@@ -44,20 +47,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Benchmark configuration
+# Validate benchmark
 case "$BENCHMARK" in
-    toy)
-        DESCRIPTION="Logistic regression hyperparameter tuning"
-        ;;
-    nomad)
-        DESCRIPTION="Materials science regression (bandgap/formation energy)"
-        ;;
-    jigsaw)
-        DESCRIPTION="Text toxicity classification"
-        ;;
-    leaf)
-        DESCRIPTION="Plant disease image classification"
-        ;;
+    toy|nomad|jigsaw|leaf) ;;
     *)
         echo "Unknown benchmark: $BENCHMARK"
         echo "Available: toy, nomad, jigsaw, leaf"
@@ -67,39 +59,10 @@ esac
 
 # Derived variables
 PYTHON="${PYTHON:-python}"
-EXPERIMENT_NAME="$BENCHMARK"
 PYTHON_SCRIPT="run_${BENCHMARK}_bench.py"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
-OUTPUT_DIR="traces/${EXPERIMENT_NAME}/${TIMESTAMP}"
 TOTAL=48
 FAILED_CONFIGS=()
-
-if ! $DRY_RUN; then
-    mkdir -p "$OUTPUT_DIR"
-
-    # Generate experiment README
-    cat > "$OUTPUT_DIR/README.md" << EOF
-# $BENCHMARK - Context Axes Experiment
-
-Timestamp (UTC): $TIMESTAMP
-
-Benchmark: $DESCRIPTION
-
-Axes varied:
-- history_window: [0, 5]
-- show_task: [false, true]
-- show_metric: [false, true]
-- show_resources: [false, true]
-
-Fixed:
-- model = gpt-4o-mini
-- temperature = 0
-- steps = $NUM_STEPS
-- seeds = [0, 1, 2]
-
-Total runs: $TOTAL
-EOF
-fi
 
 count=0
 for history_window in 0 5; do
@@ -109,8 +72,8 @@ for history_window in 0 5; do
                 for seed in 0 1 2; do
                     count=$((count + 1))
 
-                    # Build run_id
-                    run_id="${BENCHMARK}_hw${history_window}_t${show_task}_m${show_metric}_r${show_resources}_s${seed}"
+                    # Build run_id (includes timestamp subdir for grid organization)
+                    run_id="${TIMESTAMP}/${BENCHMARK}_hw${history_window}_t${show_task}_m${show_metric}_r${show_resources}_s${seed}"
 
                     # Build flag strings
                     task_flag=""
@@ -125,7 +88,6 @@ for history_window in 0 5; do
                         --history-window $history_window \
                         --seed $seed \
                         --run-id $run_id \
-                        --output-dir $OUTPUT_DIR \
                         $task_flag $metric_flag $resources_flag"
 
                     if $DRY_RUN; then

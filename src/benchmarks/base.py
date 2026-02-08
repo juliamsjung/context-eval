@@ -104,6 +104,7 @@ class BaseEnv(ABC):
             [sys.executable, str(self.train_script)],
             cwd=self.workspace,
             check=True,
+            capture_output=True,
         )
         return json.loads(self.results_path.read_text())
 
@@ -120,6 +121,7 @@ class BenchmarkConfig:
     model: str = "gpt-4o-mini"
     temperature: float = 0
     debug_show_prompt: bool = False
+    verbose: bool = False
 
 
 @dataclass
@@ -158,7 +160,7 @@ class BaseBenchmark(ABC):
     @property
     @abstractmethod
     def benchmark_name(self) -> str:
-        """Unique identifier for this benchmark (e.g., 'nomad', 'toy_tabular')."""
+        """Unique identifier for this benchmark (e.g., 'nomad', 'toy')."""
         ...
 
     @property
@@ -415,7 +417,8 @@ class BaseBenchmark(ABC):
         )
 
         # Step 0: Baseline
-        print(f"===> Baseline run ({self.benchmark_name})")
+        if self.config.verbose:
+            print(f"===> Baseline run ({self.benchmark_name})")
         baseline_metrics = self.run_training(current_config)
         self.history.append(IterationResult(
             step=0,
@@ -431,7 +434,8 @@ class BaseBenchmark(ABC):
 
         # Iteration loop
         for step in range(1, self.config.num_steps + 1):
-            print(f"\n===> {self.benchmark_name} Step {step}/{self.config.num_steps}")
+            if self.config.verbose:
+                print(f"\n===> {self.benchmark_name} Step {step}/{self.config.num_steps}")
 
             # Propose new config
             proposal, source, token_usage = self.propose_config(
@@ -449,7 +453,8 @@ class BaseBenchmark(ABC):
             proposal = self.sanitize_config(proposal)
             current_config.update(proposal)
 
-            print(f"{source.upper()} proposal: {proposal}")
+            if self.config.verbose:
+                print(f"{source.upper()} proposal: {proposal}")
 
             self.logger.log_op("op.config_proposal", step_idx=step, details={
                 "proposal": proposal,
@@ -481,7 +486,8 @@ class BaseBenchmark(ABC):
                 "source": source,
             })
 
-            print(f"Result: {json.dumps(metrics, indent=2)}")
+            if self.config.verbose:
+                print(f"Result: {json.dumps(metrics, indent=2)}")
 
         # Finalize
         run_totals = self._compute_run_totals()
@@ -505,8 +511,13 @@ class BaseBenchmark(ABC):
             details=final_result,
         )
 
-        print(f"\n===> Final {self.benchmark_name} summary")
-        print(json.dumps(final_result, indent=2))
+        if self.config.verbose:
+            print(f"\n===> Final {self.benchmark_name} summary")
+            print(json.dumps(final_result, indent=2))
+
+        # Always print final score
+        primary_metric = self._get_primary_score(self.history[-1].metrics)
+        print(f"Final score: {primary_metric:.4f}")
 
         return final_result
 
