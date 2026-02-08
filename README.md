@@ -167,37 +167,3 @@ These flags control what information the LLM agent sees:
 | `--verbose` | off | Enable step-by-step logging |
 | `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
 
----
-
-## Project Structure
-
-```
-scripts/                # Data fetching, preparation, and experiment grids
-├── fetch_nomad.py
-├── fetch_leaf.py
-├── fetch_jigsaw.py
-├── prepare_nomad.py
-├── prepare_leaf.py
-├── prepare_jigsaw.py
-└── run_grid.sh         # Run experiment grid for any benchmark
-
-src/
-├── benchmarks/         # BaseBenchmark and task-specific implementations
-│   ├── base.py
-│   ├── nomad/          # NOMAD benchmark
-│   ├── leaf/           # Leaf benchmark (WIP)
-│   ├── jigsaw/         # Jigsaw benchmark (WIP)
-│   └── toy/            # Toy benchmark
-├── context/            # Agent-visible context construction and policies
-│   ├── ContextBundle
-│   ├── ContextAxes
-│   └── ContextBuilder
-├── trace/              # Observability layer (RunLogger, JSONL trace schema)
-│   ├── RunLogger
-│   └── TRACE_ONLY_FIELDS
-└── utils/              # CLI utilities, configuration helpers
-
-kaggle-data/            # Raw Kaggle downloads (gitignored)
-traces/                 # Output JSONL traces (timestamped subdirectories)
-```
-
