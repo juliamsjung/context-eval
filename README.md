@@ -11,18 +11,17 @@ Inspired by [MLAgentBench](https://arxiv.org/pdf/2310.03302) and [MLEBench](http
 ## Quick Start
 
 ```bash
-# Toy benchmark (logistic regression tuning)
-python run_toy_bench.py --num-steps 3
+# Single benchmark runs
+python run_toy_bench.py --num-steps 5
+python run_nomad_bench.py --num-steps 5 --show-task --show-metric
 
-# NOMAD benchmark (materials science regression)
-python run_nomad_bench.py --num-steps 3 --show-task --show-metric
-
-# With resource_summary visible to agent
-python run_nomad_bench.py --num-steps 3 --show-task --show-metric --show-resources
-
-# With custom model and temperature
-python run_toy_bench.py --num-steps 3 --model gpt-4o --temperature 0.5
+# Experiment grids (48 runs across all context axis combinations)
+./scripts/run_grid.sh toy --dry-run    # preview commands
+./scripts/run_grid.sh toy              # run full grid
+./scripts/run_grid.sh nomad
 ```
+
+Results saved to `traces/{benchmark}/{timestamp}/`.
 
 ---
 
@@ -167,52 +166,6 @@ These flags control what information the LLM agent sees:
 |------|---------|-------------|
 | `--verbose` | off | Enable step-by-step logging |
 | `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
-
-## Running Benchmarks
-
-### Available Benchmarks
-
-| Script | Dataset | Task Type |
-|--------|---------|-----------|
-| `run_toy_bench.py` | Synthetic | Logistic regression tuning |
-| `run_nomad_bench.py` | NOMAD 2018 | Materials science regression |
-
-### Examples
-
-```bash
-# Basic run with default settings
-python run_toy_bench.py --num-steps 5
-
-# Full context: task description + metric description + history
-python run_nomad_bench.py --num-steps 5 \
-    --show-task --show-metric --history-window 5
-
-# Minimal context: no task/metric descriptions, no history
-python run_nomad_bench.py --num-steps 5 \
-    --history-window 0
-
-# Custom run with seed for reproducibility
-python run_nomad_bench.py --num-steps 10 \
-    --show-task --show-metric --seed 42 --run-id my-experiment
-```
-
----
-
-## Running Experiment Grids
-
-Run full experiment grids across all context axis combinations:
-
-```bash
-# Preview commands without running (dry-run)
-./scripts/run_grid.sh toy --dry-run
-./scripts/run_grid.sh nomad --dry-run
-
-# Run full grid (48 runs: 2 history_windows × 2³ boolean axes × 3 seeds)
-./scripts/run_grid.sh toy
-./scripts/run_grid.sh nomad
-```
-
-Results are saved to `traces/{benchmark}/{timestamp}/`.
 
 ---
 
