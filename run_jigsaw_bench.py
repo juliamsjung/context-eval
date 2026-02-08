@@ -13,19 +13,10 @@ def main() -> None:
         description="Run Jigsaw Toxic Comment Classification benchmark",
     )
 
-    results = run_jigsaw_bench(
-        num_steps=args.num_steps,
-        history_window=args.history_window,
-        show_task=args.show_task,
-        show_metric=args.show_metric,
-        show_resources=args.show_resources,
-        seed=args.seed,
-        run_id=args.run_id,
-        model=args.model,
-        temperature=args.temperature,
-    )
+    results = run_jigsaw_bench(args)
 
-    print(json.dumps(results, indent=2))
+    if args.verbose:
+        print(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":

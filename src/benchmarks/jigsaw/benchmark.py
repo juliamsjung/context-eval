@@ -122,56 +122,44 @@ class JigsawBenchmark(BaseBenchmark):
         # Filter config to only tunable params (bundle already validated)
         filtered_config = {k: bundle.current_config.get(k) for k in PARAM_BOUNDS.keys() if k in bundle.current_config}
 
-        # Build dict representation for JSON serialization
-        bundle_dict = {
-            "current_config": filtered_config,
-            "latest_score": bundle.latest_score,
-            "recent_history": bundle.recent_history,
-        }
-        if bundle.task_description:
-            bundle_dict["task_description"] = bundle.task_description
-        if bundle.metric_description:
-            bundle_dict["metric_description"] = bundle.metric_description
-        if bundle.resource_summary:
-            bundle_dict["resource_summary"] = bundle.resource_summary
-
-        # Validate bundle_dict structure before serialization (checks keys, not values)
+        # Validate structures before serialization (checks keys, not values)
         if __debug__:
-            _validate_dict_keys_no_trace_fields(bundle_dict)
+            _validate_dict_keys_no_trace_fields(filtered_config)
+            if bundle.resource_summary:
+                _validate_dict_keys_no_trace_fields(bundle.resource_summary)
 
-        return (
-            "You are tuning a TF-IDF + Logistic Regression pipeline for multi-label toxicity classification. "
-            "Higher mean_auc is better (maximize). "
-            "Use the structured information below to recommend "
-            "a new configuration that improves the score.\n"
-            f"{json.dumps(bundle_dict, indent=2)}\n\n"
+        # Format history as text lines
+        if bundle.recent_history:
+            history_lines = "\n".join(
+                f"- step {e['step']}: score={e['score']:.4f}, "
+                + ", ".join(f"{k}={v}" for k, v in e['config'].items() if k in PARAM_BOUNDS)
+                for e in bundle.recent_history
+            )
+        else:
+            history_lines = "- baseline only"
+
+        prompt = "You are tuning a TF-IDF + Logistic Regression pipeline for multi-label toxicity classification.\n\n"
+        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
+        prompt += f"### Latest Score\n{bundle.latest_score:.4f}\n\n"
+        prompt += f"### History\n{history_lines}\n\n"
+
+        # Add context sections if available (using markdown headers)
+        if bundle.task_description:
+            prompt += f"### Task Description\n{bundle.task_description}\n\n"
+        if bundle.metric_description:
+            prompt += f"### Evaluation Metric\n{bundle.metric_description}\n\n"
+        if bundle.resource_summary:
+            prompt += f"### Resource Usage\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
+
+        prompt += (
             "Return JSON with numeric keys among "
             f"{list(PARAM_BOUNDS.keys())}. Keep values within reasonable ranges."
         )
+        return prompt
 
 
-def run_jigsaw_bench(
-    num_steps: int,
-    *,
-    history_window: int,
-    show_task: bool,
-    show_metric: bool,
-    show_resources: bool,
-    seed: int,
-    run_id: Optional[str],
-    model: str,
-    temperature: float,
-) -> Dict[str, Any]:
-    """Run Jigsaw benchmark. Thin wrapper around JigsawBenchmark."""
-    bench_config = BenchmarkConfig(
-        num_steps=num_steps,
-        history_window=history_window,
-        seed=seed,
-        show_task=show_task,
-        show_metric=show_metric,
-        show_resources=show_resources,
-        model=model,
-        temperature=temperature,
-    )
-    benchmark = JigsawBenchmark(bench_config)
-    return benchmark.run(run_id=run_id)
+def run_jigsaw_bench(args, run_id: Optional[str] = None) -> Dict[str, Any]:
+    """Run Jigsaw benchmark."""
+    config = BenchmarkConfig.from_args(args)
+    benchmark = JigsawBenchmark(config)
+    return benchmark.run(run_id=run_id or args.run_id)
