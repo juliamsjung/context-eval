@@ -2,10 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-from typing import Any
 
-from src.utils import logging as trace_logging
 
 
 def parse_benchmark_args(
@@ -25,7 +22,6 @@ def parse_benchmark_args(
     # Common arguments
     parser.add_argument("--num-steps", type=int, default=3, help="Number of tuning steps (default: 3).")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducibility.")
-    parser.add_argument("--output-dir", type=str, help="Custom output directory for traces.")
     parser.add_argument("--run-id", type=str, help="Custom run ID for batch tracking.")
 
     # Experimental controls (model, temperature)
@@ -42,12 +38,7 @@ def parse_benchmark_args(
 
     # Developer tools
     parser.add_argument("--debug-show-prompt", action="store_true", help="Print the LLM prompt for debugging.")
+    parser.add_argument("--verbose", action="store_true", help="Enable step-by-step logging.")
 
-    args = parser.parse_args()
-    
-    # Override trace output directory if specified
-    if args.output_dir:
-        trace_logging.TRACES_ROOT = Path(args.output_dir)
-
-    return args
+    return parser.parse_args()
 

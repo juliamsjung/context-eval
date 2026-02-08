@@ -26,11 +26,11 @@ class ToyTabularBenchmark(BaseBenchmark):
 
     @property
     def benchmark_name(self) -> str:
-        return "toy_tabular"
+        return "toy"
 
     @property
     def dataset_id(self) -> str:
-        return "toy_tabular"
+        return "toy"
 
     @property
     def agent_id(self) -> str:
@@ -136,6 +136,7 @@ def run_toy_tabular(
     model: str,
     temperature: float,
     debug_show_prompt: bool = False,
+    verbose: bool = False,
 ) -> Dict[str, Any]:
     """Run Toy benchmark."""
     bench_config = BenchmarkConfig(
@@ -148,6 +149,7 @@ def run_toy_tabular(
         model=model,
         temperature=temperature,
         debug_show_prompt=debug_show_prompt,
+        verbose=verbose,
     )
     benchmark = ToyTabularBenchmark(bench_config)
     result = benchmark.run(run_id=run_id)

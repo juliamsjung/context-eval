@@ -24,9 +24,11 @@ def main() -> None:
         model=args.model,
         temperature=args.temperature,
         debug_show_prompt=args.debug_show_prompt,
+        verbose=args.verbose,
     )
 
-    print(json.dumps(results, indent=2))
+    if args.verbose:
+        print(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":

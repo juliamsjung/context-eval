@@ -32,7 +32,7 @@ python run_toy_bench.py --num-steps 3 --model gpt-4o --temperature 0.5
 
 ```bash
 git clone <repo-url>
-cd DSC180A-Q1Project
+cd context-eval
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -158,7 +158,6 @@ These flags control what information the LLM agent sees:
 | `--num-steps` | 3 | Number of optimization iterations |
 | `--seed` | 0 | Random seed for reproducibility |
 | `--run-id` | auto | Custom run identifier |
-| `--output-dir` | `traces/` | Custom output directory for traces |
 | `--model` | gpt-4o-mini | LLM model to use |
 | `--temperature` | 0 | LLM temperature setting |
 
@@ -166,6 +165,7 @@ These flags control what information the LLM agent sees:
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--verbose` | off | Enable step-by-step logging |
 | `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
 
 ## Running Benchmarks
@@ -209,10 +209,10 @@ Run full experiment grids across all context axis combinations:
 
 # Run full grid (48 runs: 2 history_windows × 2³ boolean axes × 3 seeds)
 ./scripts/run_grid.sh toy
-./scripts/run_grid.sh nomad --num-steps 20
+./scripts/run_grid.sh nomad
 ```
 
-Results are saved to `traces/{benchmark}/{timestamp}/` with a README summarizing the experiment configuration.
+Results are saved to `traces/{benchmark}/{timestamp}/`.
 
 ---
 
