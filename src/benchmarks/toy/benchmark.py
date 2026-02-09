@@ -124,40 +124,16 @@ class ToyTabularBenchmark(BaseBenchmark):
         return prompt
 
 
-def run_toy_tabular(
-    num_steps: int,
-    *,
-    history_window: int,
-    show_task: bool,
-    show_metric: bool,
-    show_resources: bool,
-    seed: int,
-    run_id: Optional[str],
-    model: str,
-    temperature: float,
-    debug_show_prompt: bool = False,
-    verbose: bool = False,
-) -> Dict[str, Any]:
+def run_toy_tabular(args, run_id: Optional[str] = None) -> Dict[str, Any]:
     """Run Toy benchmark."""
-    bench_config = BenchmarkConfig(
-        num_steps=num_steps,
-        history_window=history_window,
-        seed=seed,
-        show_task=show_task,
-        show_metric=show_metric,
-        show_resources=show_resources,
-        model=model,
-        temperature=temperature,
-        debug_show_prompt=debug_show_prompt,
-        verbose=verbose,
-    )
-    benchmark = ToyTabularBenchmark(bench_config)
-    result = benchmark.run(run_id=run_id)
+    config = BenchmarkConfig.from_args(args)
+    benchmark = ToyTabularBenchmark(config)
+    result = benchmark.run(run_id=run_id or args.run_id)
 
     # Convert to legacy format for compatibility
     return {
         "final_accuracy": result["final_metrics"].get("accuracy"),
         "final_config": result["final_config"],
-        "num_steps": num_steps,
+        "num_steps": args.num_steps,
         "history": result["history"],
     }

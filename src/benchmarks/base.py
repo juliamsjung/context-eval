@@ -123,6 +123,22 @@ class BenchmarkConfig:
     debug_show_prompt: bool = False
     verbose: bool = False
 
+    @classmethod
+    def from_args(cls, args) -> "BenchmarkConfig":
+        """Create config from argparse.Namespace."""
+        return cls(
+            num_steps=args.num_steps,
+            history_window=args.history_window,
+            seed=args.seed,
+            show_task=args.show_task,
+            show_metric=args.show_metric,
+            show_resources=args.show_resources,
+            model=args.model,
+            temperature=args.temperature,
+            debug_show_prompt=args.debug_show_prompt,
+            verbose=args.verbose,
+        )
+
 
 @dataclass
 class IterationResult:

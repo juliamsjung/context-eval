@@ -135,7 +135,7 @@ class NomadBenchmark(BaseBenchmark):
         if bundle.recent_history:
             history_lines = "\n".join(
                 f"- step {e['step']}: score={e['score']:.4f}, "
-                + ", ".join(f"{k}={v}" for k, v in e['config'].items())
+                + ", ".join(f"{k}={v}" for k, v in e['config'].items() if k in PARAM_BOUNDS)
                 for e in bundle.recent_history
             )
         else:
@@ -161,32 +161,8 @@ class NomadBenchmark(BaseBenchmark):
         return prompt
 
 
-def run_nomad_bench(
-    num_steps: int,
-    *,
-    history_window: int,
-    show_task: bool,
-    show_metric: bool,
-    show_resources: bool,
-    seed: int,
-    run_id: Optional[str],
-    model: str,
-    temperature: float,
-    debug_show_prompt: bool = False,
-    verbose: bool = False,
-) -> Dict[str, Any]:
-    """Run NOMAD benchmark. Thin wrapper around NomadBenchmark."""
-    bench_config = BenchmarkConfig(
-        num_steps=num_steps,
-        history_window=history_window,
-        seed=seed,
-        show_task=show_task,
-        show_metric=show_metric,
-        show_resources=show_resources,
-        model=model,
-        temperature=temperature,
-        debug_show_prompt=debug_show_prompt,
-        verbose=verbose,
-    )
-    benchmark = NomadBenchmark(bench_config)
-    return benchmark.run(run_id=run_id)
+def run_nomad_bench(args, run_id: Optional[str] = None) -> Dict[str, Any]:
+    """Run NOMAD benchmark."""
+    config = BenchmarkConfig.from_args(args)
+    benchmark = NomadBenchmark(config)
+    return benchmark.run(run_id=run_id or args.run_id)
