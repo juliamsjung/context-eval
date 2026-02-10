@@ -163,7 +163,7 @@ These flags control what information the LLM agent sees:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--verbose` | off | Enable step-by-step logging |
-| `--debug-show-prompt` | off | Print the full LLM prompt for debugging |
+| `--debug-show-llm` | off | Print full LLM request and response for debugging |
 
 ## Running Benchmarks
 

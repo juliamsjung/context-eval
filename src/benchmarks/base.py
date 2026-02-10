@@ -120,7 +120,7 @@ class BenchmarkConfig:
     show_resources: bool = False
     model: str = "gpt-4o-mini"
     temperature: float = 0
-    debug_show_prompt: bool = False
+    debug_show_llm: bool = False
     verbose: bool = False
 
     @classmethod
@@ -135,7 +135,7 @@ class BenchmarkConfig:
             show_resources=args.show_resources,
             model=args.model,
             temperature=args.temperature,
-            debug_show_prompt=args.debug_show_prompt,
+            debug_show_llm=args.debug_show_llm,
             verbose=args.verbose,
         )
 
@@ -326,11 +326,6 @@ class BaseBenchmark(ABC):
         system_prompt = self._get_llm_system_prompt()
         user_prompt = self._build_llm_user_prompt(bundle)
 
-        if self.config.debug_show_prompt:
-            print("\n[DEBUG] ==== AGENT PROMPT BEGIN ====")
-            print(user_prompt)
-            print("[DEBUG] ==== AGENT PROMPT END ====\n")
-
         client = OpenAI(api_key=api_key)
         t0 = datetime.utcnow().timestamp()
         resp = client.chat.completions.create(
@@ -357,7 +352,21 @@ class BaseBenchmark(ABC):
             "total_tokens": resp.usage.total_tokens,
             "latency_sec": latency,
             "api_cost": round(api_cost, 8),  # Store cost per call for context aggregation
+            "finish_reason": resp.choices[0].finish_reason,
+            "raw_llm_response": resp.model_dump(),
         }
+
+        if self.config.debug_show_llm:
+            print("\n[DEBUG] ==== LLM REQUEST BEGIN ====")
+            print(f"System:\n{system_prompt}\n")
+            print(f"User:\n{user_prompt}")
+            print("[DEBUG] ==== LLM REQUEST END ====\n")
+
+            print("[DEBUG] ==== LLM RESPONSE BEGIN ====")
+            print(content)
+            print("[DEBUG] ==== LLM RESPONSE END ====")
+            print(f"[DEBUG] finish_reason: {resp.choices[0].finish_reason}, "
+                  f"tokens: {input_tokens} in / {output_tokens} out\n")
 
         parsed = safe_parse_json(content)
         if not parsed:

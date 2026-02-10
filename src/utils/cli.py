@@ -37,7 +37,7 @@ def parse_benchmark_args(
     parser.add_argument("--history-window", type=int, default=5, help="Number of history entries to show (default: 5, 0=none).")
 
     # Developer tools
-    parser.add_argument("--debug-show-prompt", action="store_true", help="Print the LLM prompt for debugging.")
+    parser.add_argument("--debug-show-llm", action="store_true", help="Print full LLM request and response for debugging.")
     parser.add_argument("--verbose", action="store_true", help="Enable step-by-step logging.")
 
     return parser.parse_args()
