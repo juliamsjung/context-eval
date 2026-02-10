@@ -34,7 +34,7 @@ def parse_benchmark_args(
     parser.add_argument("--show-task", action="store_true", help="Include task description in prompt.")
     parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")
     parser.add_argument("--show-resources", action="store_true", help="Include resource usage (tokens, cost, latency) in prompt.")
-    parser.add_argument("--history-window", type=int, default=5, help="Number of history entries to show (default: 5, 0=none).")
+    parser.add_argument("--history-window", type=int, default=0, help="Number of history entries to show (default: 0, i.e., none).")
 
     # Developer tools
     parser.add_argument("--debug-show-llm", action="store_true", help="Print full LLM request and response for debugging.")

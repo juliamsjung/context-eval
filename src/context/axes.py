@@ -23,7 +23,7 @@ class ContextAxes:
         show_metric: Whether to include metric_description.txt content
         show_resources: Whether to include resource usage (tokens, cost, latency)
     """
-    history_window: int = 5
+    history_window: int = 0
     show_task: bool = False
     show_metric: bool = False
     show_resources: bool = False
