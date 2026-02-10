@@ -50,10 +50,12 @@ class NomadBenchmark(BaseBenchmark):
     def run_training(self, config: Dict[str, Any]) -> Dict[str, float]:
         self.env.write_config(config)
         results = self.env.run_train()
+        metrics = results.get("metrics", {})
         return {
-            "mae": results.get("metric_value", results.get("metrics", {}).get("mae", 0.0)),
-            "rmse": results.get("metrics", {}).get("rmse", 0.0),
-            "r2": results.get("metrics", {}).get("r2", 0.0),
+            "rmsle": metrics.get("rmsle", 0.0),
+            "mae": metrics.get("mae", 0.0),
+            "rmse": metrics.get("rmse", 0.0),
+            "r2": metrics.get("r2", 0.0),
         }
 
     def fallback_config(self, current_config: Dict[str, Any], step: int) -> Dict[str, Any]:
@@ -106,8 +108,8 @@ class NomadBenchmark(BaseBenchmark):
         return sanitized
 
     def _get_primary_score(self, metrics: Dict[str, float]) -> float:
-        """Extract primary score for agent feedback (lower is better for MAE)."""
-        return metrics.get("mae", 0.0)
+        """Extract primary score for agent feedback (lower is better for RMSLE)."""
+        return metrics.get("rmsle", 0.0)
 
     def _get_llm_system_prompt(self) -> str:
         return "You are an ML assistant optimizing gradient boosting hyperparameters."
