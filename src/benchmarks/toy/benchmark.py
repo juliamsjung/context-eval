@@ -98,19 +98,17 @@ class ToyTabularBenchmark(BaseBenchmark):
             if bundle.resource_summary:
                 _validate_dict_keys_no_trace_fields(bundle.resource_summary)
 
-        # Format history as text lines
+        prompt = "You are adjusting hyperparameters for logistic regression.\n\n"
+        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
+        prompt += f"### Latest Score\n{bundle.latest_score:.4f}\n\n"
+
+        # Add history section only if history is available
         if bundle.recent_history:
             history_lines = "\n".join(
                 f"- step {e['step']}: score={e['score']:.4f}, C={e['config'].get('C')}, max_iter={e['config'].get('max_iter')}"
                 for e in bundle.recent_history
             )
-        else:
-            history_lines = "- baseline only"
-
-        prompt = "You are adjusting hyperparameters for logistic regression.\n\n"
-        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
-        prompt += f"### Latest Score\n{bundle.latest_score:.4f}\n\n"
-        prompt += f"### History\n{history_lines}\n\n"
+            prompt += f"### History\n{history_lines}\n\n"
 
         # Add context sections if available (using markdown headers)
         if bundle.task_description:

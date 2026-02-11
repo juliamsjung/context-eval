@@ -113,7 +113,7 @@ class BaseEnv(ABC):
 class BenchmarkConfig:
     """Configuration for a benchmark run."""
     num_steps: int = 3
-    history_window: int = 5
+    history_window: int = 0
     seed: int = 0
     show_task: bool = False
     show_metric: bool = False

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, mean_squared_log_error
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -69,12 +69,17 @@ def main() -> None:
     mae = float(mean_absolute_error(y_test, preds))
     mse = float(mean_squared_error(y_test, preds))
     rmse = math.sqrt(mse)
+    # RMSLE: Root Mean Squared Logarithmic Error (Kaggle evaluation metric)
+    # Clamp predictions to avoid log(negative) - targets are always positive
+    preds_clamped = np.maximum(preds, 0)
+    rmsle = math.sqrt(float(mean_squared_log_error(y_test, preds_clamped)))
     metrics = {
+        "rmsle": rmsle,
         "mae": mae,
         "rmse": rmse,
         "r2": float(r2_score(y_test, preds)),
     }
-    metric_name = "mae"  # Environment-level constant, not from config
+    metric_name = "rmsle"  # Kaggle evaluation metric (lower is better)
     metric_value = metrics[metric_name]
 
     results = {

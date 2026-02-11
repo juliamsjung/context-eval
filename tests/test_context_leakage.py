@@ -144,7 +144,7 @@ class TestContextAxes:
     def test_default_axes(self):
         """Default axes should have sensible values."""
         axes = ContextAxes()
-        assert axes.history_window == 5
+        assert axes.history_window == 0
         assert axes.show_task is False
         assert axes.show_metric is False
         assert axes.show_resources is False
