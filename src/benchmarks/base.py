@@ -113,7 +113,7 @@ class BaseEnv(ABC):
 class BenchmarkConfig:
     """Configuration for a benchmark run."""
     num_steps: int = 3
-    history_window: int = 0
+    feedback_depth: int = 1
     seed: int = 0
     show_task: bool = False
     show_metric: bool = False
@@ -128,7 +128,7 @@ class BenchmarkConfig:
         """Create config from argparse.Namespace."""
         return cls(
             num_steps=args.num_steps,
-            history_window=args.history_window,
+            feedback_depth=args.feedback_depth,
             seed=args.seed,
             show_task=args.show_task,
             show_metric=args.show_metric,
@@ -165,7 +165,7 @@ class BaseBenchmark(ABC):
         self.logger: Optional[RunLogger] = None
         # CONTEXT ONLY: Builder for agent-visible context bundles
         self._context_axes = ContextAxes(
-            history_window=config.history_window,
+            feedback_depth=config.feedback_depth,
             show_task=config.show_task,
             show_metric=config.show_metric,
             show_resources=config.show_resources,
@@ -432,7 +432,7 @@ class BaseBenchmark(ABC):
             max_steps=self.config.num_steps,
             seed=self.config.seed,
             experiment_tags={
-                "history_window": self.config.history_window,
+                "feedback_depth": self.config.feedback_depth,
                 "show_task": self.config.show_task,
                 "show_metric": self.config.show_metric,
                 "show_resources": self.config.show_resources,

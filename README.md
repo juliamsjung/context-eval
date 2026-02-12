@@ -146,7 +146,7 @@ These flags control what information the LLM agent sees:
 | `--show-task` | off | Include task description in LLM prompt |
 | `--show-metric` | off | Include metric description in LLM prompt |
 | `--show-resources` | off | Include resource usage (tokens, cost, latency) in LLM prompt |
-| `--history-window` | 0 | Number of history entries to include (0=none, 5=recommended) |
+| `--feedback-depth` | 1 | Feedback depth: number of visible outcome signals (1=current only, 5=current+4 history) |
 
 ### Experiment Settings
 

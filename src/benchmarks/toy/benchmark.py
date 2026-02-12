@@ -100,7 +100,7 @@ class ToyTabularBenchmark(BaseBenchmark):
 
         prompt = "You are adjusting hyperparameters for logistic regression.\n\n"
         prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
-        prompt += f"### Latest Score\n{bundle.latest_score:.4f}\n\n"
+        prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
 
         # Add history section only if history is available
         if bundle.recent_history:

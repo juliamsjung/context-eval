@@ -146,8 +146,8 @@ class ContextBuilder:
 
         # Build windowed history with only agent-visible fields
         recent_history: List[Dict[str, Any]] = []
-        if self.axes.history_window > 0:
-            for entry in history[-self.axes.history_window:]:
+        if self.axes.feedback_depth > 1:
+            for entry in history[-(self.axes.feedback_depth - 1):]:
                 recent_history.append({
                     "step": entry.step,
                     "config": entry.config,

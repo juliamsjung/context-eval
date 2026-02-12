@@ -144,29 +144,29 @@ class TestContextAxes:
     def test_default_axes(self):
         """Default axes should have sensible values."""
         axes = ContextAxes()
-        assert axes.history_window == 0
+        assert axes.feedback_depth == 1
         assert axes.show_task is False
         assert axes.show_metric is False
         assert axes.show_resources is False
 
     def test_custom_axes(self):
         """Custom axes should be settable."""
-        axes = ContextAxes(history_window=10, show_task=True, show_metric=True, show_resources=True)
-        assert axes.history_window == 10
+        axes = ContextAxes(feedback_depth=10, show_task=True, show_metric=True, show_resources=True)
+        assert axes.feedback_depth == 10
         assert axes.show_task is True
         assert axes.show_metric is True
         assert axes.show_resources is True
 
-    def test_negative_history_window_raises_error(self):
-        """Negative history_window should raise ValueError."""
+    def test_zero_feedback_depth_raises_error(self):
+        """Zero feedback_depth should raise ValueError."""
         with pytest.raises(ValueError):
-            ContextAxes(history_window=-1)
+            ContextAxes(feedback_depth=0)
 
     def test_axes_is_frozen(self):
         """ContextAxes should be immutable."""
         axes = ContextAxes()
         with pytest.raises(AttributeError):
-            axes.history_window = 10  # type: ignore
+            axes.feedback_depth = 10  # type: ignore
 
 
 class TestContextBuilder:
@@ -178,7 +178,7 @@ class TestContextBuilder:
             return metrics.get("accuracy", 0.0)
 
         builder = ContextBuilder(
-            axes=ContextAxes(history_window=2),
+            axes=ContextAxes(feedback_depth=3),
             score_extractor=score_extractor,
         )
 
@@ -199,13 +199,13 @@ class TestContextBuilder:
         assert len(bundle.recent_history) == 1
         assert bundle.recent_history[0]["score"] == 0.85
 
-    def test_build_respects_history_window(self):
-        """Builder should respect history_window setting."""
+    def test_build_respects_feedback_depth(self):
+        """Builder should respect feedback_depth setting."""
         def score_extractor(metrics):
             return metrics.get("accuracy", 0.0)
 
         builder = ContextBuilder(
-            axes=ContextAxes(history_window=2),
+            axes=ContextAxes(feedback_depth=3),
             score_extractor=score_extractor,
         )
 
@@ -223,18 +223,18 @@ class TestContextBuilder:
             history=history,
         )
 
-        # Should only include last 2 entries
+        # feedback_depth=3 means current + 2 history entries
         assert len(bundle.recent_history) == 2
         assert bundle.recent_history[0]["step"] == 3
         assert bundle.recent_history[1]["step"] == 4
 
-    def test_build_with_zero_history_window(self):
-        """Builder should exclude history when window is 0."""
+    def test_build_with_feedback_depth_one(self):
+        """Builder should exclude history when feedback_depth is 1 (current only)."""
         def score_extractor(metrics):
             return metrics.get("accuracy", 0.0)
 
         builder = ContextBuilder(
-            axes=ContextAxes(history_window=0),
+            axes=ContextAxes(feedback_depth=1),
             score_extractor=score_extractor,
         )
 

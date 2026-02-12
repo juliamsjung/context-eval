@@ -65,7 +65,7 @@ TOTAL=48
 FAILED_CONFIGS=()
 
 count=0
-for history_window in 0 5; do
+for feedback_depth in 1 5; do
     for show_task in 0 1; do
         for show_metric in 0 1; do
             for show_resources in 0 1; do
@@ -73,7 +73,7 @@ for history_window in 0 5; do
                     count=$((count + 1))
 
                     # Build run_id (includes timestamp subdir for grid organization)
-                    run_id="${TIMESTAMP}/${BENCHMARK}_hw${history_window}_t${show_task}_m${show_metric}_r${show_resources}_s${seed}"
+                    run_id="${TIMESTAMP}/${BENCHMARK}_fd${feedback_depth}_t${show_task}_m${show_metric}_r${show_resources}_s${seed}"
 
                     # Build flag strings
                     task_flag=""
@@ -85,7 +85,7 @@ for history_window in 0 5; do
 
                     cmd="$PYTHON $PYTHON_SCRIPT \
                         --num-steps $NUM_STEPS \
-                        --history-window $history_window \
+                        --feedback-depth $feedback_depth \
                         --seed $seed \
                         --run-id $run_id \
                         $task_flag $metric_flag $resources_flag"
