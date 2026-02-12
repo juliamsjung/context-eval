@@ -588,15 +588,10 @@ class BaseBenchmark(ABC):
 
             fallback_used = False
             if proposal is None:
-                proposal, fallback_clamp_events = self.fallback_config(current_config, step), []
-                # Sanitize fallback proposal
-                proposal, fallback_clamp_events = self.sanitize_config(proposal)
-                clamp_events = fallback_clamp_events
+                fallback_proposal = self.fallback_config(current_config, step)
+                proposal, clamp_events = self.sanitize_config(fallback_proposal)
                 source = "heuristic"
                 fallback_used = True
-            else:
-                # Already sanitized and clamp_events collected from propose_config
-                pass
 
             current_config.update(proposal)
 
