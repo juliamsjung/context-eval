@@ -183,15 +183,18 @@ class TestContextBuilder:
         )
 
         class FakeResult:
-            step = 0
-            config = {"lr": 0.1}
-            metrics = {"accuracy": 0.85}
-            token_usage = None
+            def __init__(self, step, accuracy):
+                self.step = step
+                self.config = {"lr": 0.1}
+                self.metrics = {"accuracy": accuracy}
+                self.token_usage = None
 
+        # history[-3:-1] gives step 0 (excluding step 1 which is current)
+        history = [FakeResult(0, 0.85), FakeResult(1, 0.88)]
         bundle = builder.build(
             current_config={"lr": 0.2},
             last_metrics={"accuracy": 0.90},
-            history=[FakeResult()],
+            history=history,
         )
 
         assert bundle.current_config == {"lr": 0.2}
@@ -223,10 +226,11 @@ class TestContextBuilder:
             history=history,
         )
 
-        # feedback_depth=3 means current + 2 history entries
+        # feedback_depth=3 means current + 2 previous entries
+        # history[-3:-1] gives steps 2 and 3 (excluding step 4 which is current)
         assert len(bundle.recent_history) == 2
-        assert bundle.recent_history[0]["step"] == 3
-        assert bundle.recent_history[1]["step"] == 4
+        assert bundle.recent_history[0]["step"] == 2
+        assert bundle.recent_history[1]["step"] == 3
 
     def test_build_with_feedback_depth_one(self):
         """Builder should exclude history when feedback_depth is 1 (current only)."""
@@ -301,7 +305,6 @@ class TestResourceSummaryGating:
             token_usage = {
                 "total_tokens": 100,
                 "api_cost": 0.001,
-                "latency_sec": 0.5,
             }
 
         bundle = builder.build(
@@ -311,9 +314,9 @@ class TestResourceSummaryGating:
         )
 
         assert bundle.resource_summary is not None
-        assert bundle.resource_summary["tokens_used_so_far"] == 100
-        assert bundle.resource_summary["api_cost_so_far"] == 0.001
-        assert bundle.resource_summary["mean_latency_sec"] == 0.5
+        assert bundle.resource_summary["tokens_current"] == 100
+        assert bundle.resource_summary["tokens_cumulative"] == 100
+        assert bundle.resource_summary["cost_cumulative"] == 0.001
 
     def test_resource_summary_aggregates_multiple_entries(self):
         """resource_summary should aggregate across multiple history entries."""
@@ -326,20 +329,19 @@ class TestResourceSummaryGating:
         )
 
         class FakeResult:
-            def __init__(self, step, tokens, cost, latency):
+            def __init__(self, step, tokens, cost):
                 self.step = step
                 self.config = {"lr": 0.1}
                 self.metrics = {"accuracy": 0.85}
                 self.token_usage = {
                     "total_tokens": tokens,
                     "api_cost": cost,
-                    "latency_sec": latency,
                 }
 
         history = [
-            FakeResult(1, 100, 0.001, 0.5),
-            FakeResult(2, 150, 0.002, 0.6),
-            FakeResult(3, 200, 0.003, 0.7),
+            FakeResult(1, 100, 0.001),
+            FakeResult(2, 150, 0.002),
+            FakeResult(3, 200, 0.003),
         ]
 
         bundle = builder.build(
@@ -349,10 +351,9 @@ class TestResourceSummaryGating:
         )
 
         assert bundle.resource_summary is not None
-        assert bundle.resource_summary["tokens_used_so_far"] == 450  # 100 + 150 + 200
-        assert bundle.resource_summary["api_cost_so_far"] == 0.006  # 0.001 + 0.002 + 0.003
-        # Mean latency: (0.5 + 0.6 + 0.7) / 3 = 0.6
-        assert bundle.resource_summary["mean_latency_sec"] == 0.6
+        assert bundle.resource_summary["tokens_current"] == 200  # Last entry's tokens
+        assert bundle.resource_summary["tokens_cumulative"] == 450  # 100 + 150 + 200
+        assert bundle.resource_summary["cost_cumulative"] == 0.006  # 0.001 + 0.002 + 0.003
 
     def test_resource_summary_handles_missing_token_usage(self):
         """resource_summary should handle entries without token_usage."""
@@ -371,7 +372,6 @@ class TestResourceSummaryGating:
             token_usage = {
                 "total_tokens": 100,
                 "api_cost": 0.001,
-                "latency_sec": 0.5,
             }
 
         class FakeResultWithoutUsage:
@@ -387,8 +387,9 @@ class TestResourceSummaryGating:
         )
 
         assert bundle.resource_summary is not None
-        assert bundle.resource_summary["tokens_used_so_far"] == 100
-        assert bundle.resource_summary["api_cost_so_far"] == 0.001
+        assert bundle.resource_summary["tokens_current"] == 100
+        assert bundle.resource_summary["tokens_cumulative"] == 100
+        assert bundle.resource_summary["cost_cumulative"] == 0.001
 
     def test_resource_summary_in_to_dict(self):
         """resource_summary should appear in to_dict() when present."""
@@ -397,14 +398,14 @@ class TestResourceSummaryGating:
             latest_score=0.85,
             recent_history=[],
             resource_summary={
-                "tokens_used_so_far": 100,
-                "api_cost_so_far": 0.001,
-                "mean_latency_sec": 0.5,
+                "tokens_current": 100,
+                "tokens_cumulative": 100,
+                "cost_cumulative": 0.001,
             },
         )
         result = bundle.to_dict()
         assert "resource_summary" in result
-        assert result["resource_summary"]["tokens_used_so_far"] == 100
+        assert result["resource_summary"]["tokens_cumulative"] == 100
 
     def test_resource_summary_not_in_to_dict_when_none(self):
         """resource_summary should not appear in to_dict() when None."""
@@ -434,6 +435,6 @@ class TestResourceSummaryGating:
         )
 
         assert bundle.resource_summary is not None
-        assert bundle.resource_summary["tokens_used_so_far"] == 0
-        assert bundle.resource_summary["api_cost_so_far"] == 0.0
-        assert bundle.resource_summary["mean_latency_sec"] == 0.0
+        assert bundle.resource_summary["tokens_current"] == 0
+        assert bundle.resource_summary["tokens_cumulative"] == 0
+        assert bundle.resource_summary["cost_cumulative"] == 0.0

@@ -331,7 +331,7 @@ class BaseBenchmark(ABC):
         resp = client.chat.completions.create(
             model=self.config.model,
             temperature=self.config.temperature,
-            max_tokens=250,
+            max_tokens=150,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

@@ -112,7 +112,10 @@ class NomadBenchmark(BaseBenchmark):
         return metrics.get("rmsle", 0.0)
 
     def _get_llm_system_prompt(self) -> str:
-        return "You are an ML assistant optimizing gradient boosting hyperparameters."
+        return (
+            "You output ONLY valid JSON. "
+            "No explanations, no markdown, no text outside the JSON object."
+        )
 
     def _build_llm_user_prompt(
         self,
@@ -134,7 +137,7 @@ class NomadBenchmark(BaseBenchmark):
                 _validate_dict_keys_no_trace_fields(bundle.resource_summary)
 
         # Format history as text lines
-        prompt = "You are tuning a HistGradientBoostingRegressor.\n\n"
+        prompt = "### Task\nYou are tuning a HistGradientBoostingRegressor.\n\n"
         prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
         prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
 
@@ -153,10 +156,17 @@ class NomadBenchmark(BaseBenchmark):
         if bundle.metric_description:
             prompt += f"### Evaluation Metric\n{bundle.metric_description}\n\n"
         if bundle.resource_summary:
-            prompt += f"### Resource Usage\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
+            rs = bundle.resource_summary
+            prompt += (
+                f"### Resources\n"
+                f"tokens_current: {rs['tokens_current']}\n"
+                f"tokens_cumulative: {rs['tokens_cumulative']}\n"
+                f"cost_cumulative: {rs['cost_cumulative']}\n\n"
+            )
 
         prompt += (
-            f"Return JSON with keys from {list(PARAM_BOUNDS.keys())}. "
+            "### Output Format\n"
+            f"Return JSON with exactly these keys: {list(PARAM_BOUNDS.keys())}.\n"
             "Values must be numeric and within reasonable ranges."
         )
         return prompt

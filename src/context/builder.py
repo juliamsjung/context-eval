@@ -99,20 +99,19 @@ class ContextBuilder:
 
         total_tokens = 0
         total_cost = 0.0
-        total_latency = 0.0
-        call_count = 0
+        last_tokens = 0
 
         for entry in history:
             if hasattr(entry, 'token_usage') and entry.token_usage:
-                total_tokens += entry.token_usage.get("total_tokens", 0)
+                tokens = entry.token_usage.get("total_tokens", 0)
+                total_tokens += tokens
                 total_cost += entry.token_usage.get("api_cost", 0.0)  # Sum pre-computed cost
-                total_latency += entry.token_usage.get("latency_sec", 0.0)
-                call_count += 1
+                last_tokens = tokens  # Only update when we have valid token usage
 
         return {
-            "tokens_used_so_far": total_tokens,
-            "api_cost_so_far": round(total_cost, 6),
-            "mean_latency_sec": round(total_latency / call_count, 3) if call_count > 0 else 0.0,
+            "tokens_current": last_tokens,
+            "tokens_cumulative": total_tokens,
+            "cost_cumulative": round(total_cost, 6),
         }
 
     def build(
@@ -145,9 +144,12 @@ class ContextBuilder:
         latest_score = self.score_extractor(last_metrics)
 
         # Build windowed history with only agent-visible fields
+        # Exclude last entry (current step) since latest_score provides it
         recent_history: List[Dict[str, Any]] = []
         if self.axes.feedback_depth > 1:
-            for entry in history[-(self.axes.feedback_depth - 1):]:
+            num_prev = self.axes.feedback_depth - 1
+            prev_entries = history[-(num_prev + 1):-1]
+            for entry in prev_entries:
                 recent_history.append({
                     "step": entry.step,
                     "config": entry.config,
