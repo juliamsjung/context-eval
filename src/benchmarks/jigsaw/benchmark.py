@@ -150,8 +150,8 @@ class JigsawBenchmark(BaseBenchmark):
             prompt += f"### Resource Usage\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
 
         prompt += (
-            "Return JSON with numeric keys among "
-            f"{list(PARAM_BOUNDS.keys())}. Keep values within reasonable ranges."
+            f"Return JSON with keys from {list(PARAM_BOUNDS.keys())}. "
+            "Values must be numeric and within reasonable ranges."
         )
         return prompt
 

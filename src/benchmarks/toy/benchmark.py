@@ -118,7 +118,7 @@ class ToyTabularBenchmark(BaseBenchmark):
         if bundle.resource_summary:
             prompt += f"### Resource Usage\n{json.dumps(bundle.resource_summary, indent=2)}\n\n"
 
-        prompt += "Return JSON with numeric keys 'C' and 'max_iter'. Keep values positive and reasonable."
+        prompt += "Return JSON with keys 'C' and 'max_iter'. Values must be numeric."
         return prompt
 
 
