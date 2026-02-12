@@ -106,6 +106,10 @@ class NomadBenchmark(BaseBenchmark):
         """Extract primary score for agent feedback (lower is better for RMSLE)."""
         return metrics.get("rmsle", 0.0)
 
+    def _is_higher_better(self) -> bool:
+        """RMSLE: lower is better."""
+        return False
+
     def _build_llm_user_prompt(
         self,
         bundle: ContextBundle,

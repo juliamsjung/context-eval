@@ -16,8 +16,8 @@ from __future__ import annotations
 from src.trace.logger import (
     RunLogger,
     start_run,
-    TRACES_ROOT,
 )
+from src.config.paths import TRACES_ROOT
 
 __all__ = [
     "RunLogger",

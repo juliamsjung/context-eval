@@ -20,10 +20,13 @@ except ImportError:  # pragma: no cover
     OPENAI_AVAILABLE = False
 
 from src.utils.config import get_env_var
+from src.config.paths import RUNS_ROOT
 # TRACE ONLY imports
 from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
 from src.context import ContextBundle, ContextAxes, ContextBuilder
+# LOGGING LAYER imports
+from src.logging import RunSummary
 
 
 # Model pricing per million tokens (as of Jan 2025)
@@ -39,6 +42,20 @@ def _clamp(value: float, bounds: tuple[float, float]) -> float:
     """Clamp a value to the given bounds."""
     low, high = bounds
     return max(low, min(high, value))
+
+
+def _get_git_commit() -> Optional[str]:
+    """Get short git commit hash, or None if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 
 def sanitize_with_clamp_tracking(
@@ -527,6 +544,81 @@ class BaseBenchmark(ABC):
             "total_api_cost": round(total_cost, 6),
         }
 
+    def _is_higher_better(self) -> bool:
+        """Return True if higher scores are better. Subclasses can override."""
+        return True  # Default: higher is better (e.g., accuracy, AUC)
+
+    def _compute_run_summary(self, run_id: str) -> RunSummary:
+        """Compute aggregated run summary for analysis."""
+        # Performance: extract primary score from each step
+        scores = [self._get_primary_score(r.metrics) for r in self.history]
+        final_score = scores[-1]
+        best_score = max(scores) if self._is_higher_better() else min(scores)
+
+        # Efficiency: from _compute_run_totals()
+        run_totals = self._compute_run_totals()
+
+        # Diagnostics: aggregate counts from all steps
+        num_clamp_events = sum(
+            len(r.diagnostics.get("clamp_events", []))
+            for r in self.history if r.diagnostics
+        )
+        num_parse_failures = sum(
+            1 for r in self.history
+            if r.diagnostics and r.diagnostics.get("parse_failure", False)
+        )
+        num_fallbacks = sum(
+            1 for r in self.history
+            if r.diagnostics and r.diagnostics.get("fallback_used", False)
+        )
+        num_truncations = sum(
+            1 for r in self.history
+            if r.diagnostics and r.diagnostics.get("truncated", False)
+        )
+
+        # Compute axis signature for easy filtering
+        axis_signature = (
+            f"fd{self.config.feedback_depth}"
+            f"_t{int(self.config.show_task)}"
+            f"_m{int(self.config.show_metric)}"
+            f"_r{int(self.config.show_resources)}"
+            f"_d{int(self.config.show_diagnostics)}"
+        )
+
+        return RunSummary(
+            benchmark=self.benchmark_name,
+            seed=self.config.seed,
+            run_id=run_id,
+            timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            git_commit=_get_git_commit(),
+            model_name=self.config.model,
+            temperature=self.config.temperature,
+            axis_signature=axis_signature,
+            feedback_depth=self.config.feedback_depth,
+            show_task=self.config.show_task,
+            show_metric=self.config.show_metric,
+            show_resources=self.config.show_resources,
+            show_diagnostics=self.config.show_diagnostics,
+            final_score=final_score,
+            best_score=best_score,
+            num_steps_executed=len(self.history),
+            total_tokens=run_totals["total_tokens"],
+            total_cost=run_totals["total_api_cost"],
+            num_clamp_events=num_clamp_events,
+            num_parse_failures=num_parse_failures,
+            num_fallbacks=num_fallbacks,
+            num_truncations=num_truncations,
+        )
+
+    def _write_run_summary(self, summary: RunSummary) -> None:
+        """Append run summary to JSONL file."""
+        runs_dir = RUNS_ROOT
+        runs_dir.mkdir(parents=True, exist_ok=True)
+
+        output_path = runs_dir / f"{self.benchmark_name}_runs.jsonl"
+        with open(output_path, "a") as f:
+            f.write(json.dumps(summary.to_dict()) + "\n")
+
     def run(self, run_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute the full benchmark run.
@@ -673,6 +765,10 @@ class BaseBenchmark(ABC):
         # Always print final score
         primary_metric = self._get_primary_score(self.history[-1].metrics)
         print(f"Final score: {primary_metric:.4f}")
+
+        # Write run summary (logging layer - post-hoc aggregation only)
+        summary = self._compute_run_summary(run_id or self.logger.run_id)
+        self._write_run_summary(summary)
 
         return final_result
 
