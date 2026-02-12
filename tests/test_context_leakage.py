@@ -148,14 +148,16 @@ class TestContextAxes:
         assert axes.show_task is False
         assert axes.show_metric is False
         assert axes.show_resources is False
+        assert axes.show_diagnostics is False
 
     def test_custom_axes(self):
         """Custom axes should be settable."""
-        axes = ContextAxes(feedback_depth=10, show_task=True, show_metric=True, show_resources=True)
+        axes = ContextAxes(feedback_depth=10, show_task=True, show_metric=True, show_resources=True, show_diagnostics=True)
         assert axes.feedback_depth == 10
         assert axes.show_task is True
         assert axes.show_metric is True
         assert axes.show_resources is True
+        assert axes.show_diagnostics is True
 
     def test_zero_feedback_depth_raises_error(self):
         """Zero feedback_depth should raise ValueError."""
@@ -438,3 +440,282 @@ class TestResourceSummaryGating:
         assert bundle.resource_summary["tokens_current"] == 0
         assert bundle.resource_summary["tokens_cumulative"] == 0
         assert bundle.resource_summary["cost_cumulative"] == 0.0
+
+
+class TestDiagnosticsGating:
+    """Tests for diagnostics visibility gating."""
+
+    def test_show_diagnostics_false_excludes_diagnostics(self):
+        """diagnostics should be None when show_diagnostics is False."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=False),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = None
+            diagnostics = {
+                "clamp_events": [],
+                "parse_failure": False,
+                "fallback_used": False,
+                "truncated": False,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.diagnostics is None
+
+    def test_show_diagnostics_true_includes_diagnostics(self):
+        """diagnostics should be populated when show_diagnostics is True."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = None
+            diagnostics = {
+                "clamp_events": [],
+                "parse_failure": False,
+                "fallback_used": False,
+                "truncated": False,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["clamp_events"] == []
+        assert bundle.diagnostics["parse_failure"] is False
+        assert bundle.diagnostics["fallback_used"] is False
+        assert bundle.diagnostics["truncated"] is False
+
+    def test_diagnostics_clamp_detection(self):
+        """diagnostics should include clamp events when values were clamped."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = None
+            diagnostics = {
+                "clamp_events": [
+                    {"parameter": "max_iter", "proposed": 1200, "executed": 1000},
+                    {"parameter": "learning_rate", "proposed": 0.8, "executed": 0.5},
+                ],
+                "parse_failure": False,
+                "fallback_used": False,
+                "truncated": False,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.diagnostics is not None
+        assert len(bundle.diagnostics["clamp_events"]) == 2
+        assert bundle.diagnostics["clamp_events"][0]["parameter"] == "max_iter"
+        assert bundle.diagnostics["clamp_events"][0]["proposed"] == 1200
+        assert bundle.diagnostics["clamp_events"][0]["executed"] == 1000
+
+    def test_diagnostics_truncation_detection(self):
+        """diagnostics should indicate truncation when LLM response was truncated."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = {"finish_reason": "length"}
+            diagnostics = {
+                "clamp_events": [],
+                "parse_failure": True,
+                "fallback_used": True,
+                "truncated": True,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["truncated"] is True
+        assert bundle.diagnostics["parse_failure"] is True
+
+    def test_diagnostics_fallback_detection(self):
+        """diagnostics should indicate fallback when heuristic was used."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = None
+            diagnostics = {
+                "clamp_events": [],
+                "parse_failure": False,
+                "fallback_used": True,
+                "truncated": False,
+            }
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResult()],
+        )
+
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["fallback_used"] is True
+        assert bundle.diagnostics["parse_failure"] is False
+
+    def test_diagnostics_only_current_step(self):
+        """diagnostics should only show data from the most recent step."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResult:
+            def __init__(self, step, clamp_events):
+                self.step = step
+                self.config = {"lr": 0.1}
+                self.metrics = {"accuracy": 0.85}
+                self.token_usage = None
+                self.diagnostics = {
+                    "clamp_events": clamp_events,
+                    "parse_failure": False,
+                    "fallback_used": False,
+                    "truncated": False,
+                }
+
+        # Step 1 had clamp events, step 2 did not
+        history = [
+            FakeResult(1, [{"parameter": "C", "proposed": 200, "executed": 100}]),
+            FakeResult(2, []),
+        ]
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=history,
+        )
+
+        # Should only get diagnostics from step 2 (most recent)
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["clamp_events"] == []
+
+    def test_diagnostics_empty_history_returns_none(self):
+        """diagnostics should be None when history is empty."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[],
+        )
+
+        assert bundle.diagnostics is None
+
+    def test_diagnostics_in_to_dict(self):
+        """diagnostics should appear in to_dict() when present."""
+        bundle = ContextBundle(
+            current_config={"lr": 0.1},
+            latest_score=0.85,
+            recent_history=[],
+            diagnostics={
+                "clamp_events": [],
+                "parse_failure": False,
+                "fallback_used": False,
+                "truncated": False,
+            },
+        )
+        result = bundle.to_dict()
+        assert "diagnostics" in result
+        assert result["diagnostics"]["parse_failure"] is False
+
+    def test_diagnostics_not_in_to_dict_when_none(self):
+        """diagnostics should not appear in to_dict() when None."""
+        bundle = ContextBundle(
+            current_config={"lr": 0.1},
+            latest_score=0.85,
+            recent_history=[],
+            diagnostics=None,
+        )
+        result = bundle.to_dict()
+        assert "diagnostics" not in result
+
+    def test_diagnostics_no_diagnostics_field_in_history(self):
+        """diagnostics should be None when history entries lack diagnostics field."""
+        def score_extractor(metrics):
+            return metrics.get("accuracy", 0.0)
+
+        builder = ContextBuilder(
+            axes=ContextAxes(show_diagnostics=True),
+            score_extractor=score_extractor,
+        )
+
+        class FakeResultWithoutDiagnostics:
+            step = 1
+            config = {"lr": 0.1}
+            metrics = {"accuracy": 0.85}
+            token_usage = None
+            diagnostics = None
+
+        bundle = builder.build(
+            current_config={"lr": 0.2},
+            last_metrics={"accuracy": 0.90},
+            history=[FakeResultWithoutDiagnostics()],
+        )
+
+        assert bundle.diagnostics is None

@@ -22,11 +22,13 @@ class ContextAxes:
         show_task: Whether to include task_description.txt content
         show_metric: Whether to include metric_description.txt content
         show_resources: Whether to include resource usage (tokens, cost, latency)
+        show_diagnostics: Whether to include execution diagnostics (clamp events, parse failures, etc.)
     """
     feedback_depth: int = 1
     show_task: bool = False
     show_metric: bool = False
     show_resources: bool = False
+    show_diagnostics: bool = False
 
     def __post_init__(self) -> None:
         """Validate axis values."""

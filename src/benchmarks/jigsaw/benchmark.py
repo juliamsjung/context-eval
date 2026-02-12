@@ -5,7 +5,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.benchmarks.base import BaseBenchmark, BenchmarkConfig, IterationResult, _clamp, _validate_dict_keys_no_trace_fields
+from typing import Tuple
+from src.benchmarks.base import (
+    BaseBenchmark, BenchmarkConfig, _clamp,
+    sanitize_with_clamp_tracking, format_context_sections,
+)
 from src.benchmarks.jigsaw.env import JigsawEnv
 # CONTEXT ONLY import
 from src.context import ContextBundle
@@ -87,55 +91,27 @@ class JigsawBenchmark(BaseBenchmark):
             ),
         }
 
-    def sanitize_config(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
-        sanitized: Dict[str, Any] = {}
-        for key, (low, high) in PARAM_BOUNDS.items():
-            if key not in proposal:
-                continue
-            try:
-                val = float(proposal[key])
-                if key in {"max_features", "ngram_max", "min_df", "max_iter"}:
-                    sanitized[key] = int(_clamp(round(val), (low, high)))
-                else:
-                    sanitized[key] = _clamp(val, (low, high))
-            except (ValueError, TypeError):
-                continue
-        return sanitized
+    def sanitize_config(self, proposal: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        return sanitize_with_clamp_tracking(
+            proposal, PARAM_BOUNDS,
+            integer_keys={"max_features", "ngram_max", "min_df", "max_iter"},
+        )
 
     def _get_primary_score(self, metrics: Dict[str, float]) -> float:
         """Extract primary score for agent feedback (higher is better for AUC)."""
         return metrics.get("mean_auc", 0.0)
 
-    def _get_llm_system_prompt(self) -> str:
-        return (
-            "You output ONLY valid JSON. "
-            "No explanations, no markdown, no text outside the JSON object."
-        )
-
     def _build_llm_user_prompt(
         self,
         bundle: ContextBundle,
     ) -> str:
-        """
-        CONTEXT ONLY: Build the user prompt from a validated ContextBundle.
-
-        Args:
-            bundle: Validated ContextBundle containing only agent-visible data
-        """
-        # Filter config to only tunable params (bundle already validated)
+        """CONTEXT ONLY: Build the user prompt from a validated ContextBundle."""
         filtered_config = {k: bundle.current_config.get(k) for k in PARAM_BOUNDS.keys() if k in bundle.current_config}
-
-        # Validate structures before serialization (checks keys, not values)
-        if __debug__:
-            _validate_dict_keys_no_trace_fields(filtered_config)
-            if bundle.resource_summary:
-                _validate_dict_keys_no_trace_fields(bundle.resource_summary)
 
         prompt = "### Task\nYou are tuning a TF-IDF + Logistic Regression pipeline for multi-label toxicity classification.\n\n"
         prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
         prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
 
-        # Add history section only if history is available
         if bundle.recent_history:
             history_lines = "\n".join(
                 f"- step {e['step']}: score={e['score']:.4f}, "
@@ -144,20 +120,7 @@ class JigsawBenchmark(BaseBenchmark):
             )
             prompt += f"### History\n{history_lines}\n\n"
 
-        # Add context sections if available (using markdown headers)
-        if bundle.task_description:
-            prompt += f"### Task Description\n{bundle.task_description}\n\n"
-        if bundle.metric_description:
-            prompt += f"### Evaluation Metric\n{bundle.metric_description}\n\n"
-        if bundle.resource_summary:
-            rs = bundle.resource_summary
-            prompt += (
-                f"### Resources\n"
-                f"tokens_current: {rs['tokens_current']}\n"
-                f"tokens_cumulative: {rs['tokens_cumulative']}\n"
-                f"cost_cumulative: {rs['cost_cumulative']}\n\n"
-            )
-
+        prompt += format_context_sections(bundle)
         prompt += (
             "### Output Format\n"
             f"Return JSON with exactly these keys: {list(PARAM_BOUNDS.keys())}.\n"

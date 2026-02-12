@@ -20,6 +20,7 @@ class IterationResultProtocol(Protocol):
     config: Dict[str, Any]
     metrics: Dict[str, float]
     token_usage: Optional[Dict[str, Any]]
+    diagnostics: Optional[Dict[str, Any]]
 
 
 class ContextBuilder:
@@ -114,6 +115,33 @@ class ContextBuilder:
             "cost_cumulative": round(total_cost, 6),
         }
 
+    def _get_diagnostics(
+        self, history: List[IterationResultProtocol]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        CONTEXT ONLY: Project diagnostics from most recent step.
+
+        This method only READS pre-computed diagnostics from IterationResult.
+        It NEVER computes truncation, parse_failure, etc. — that's the execution layer's job.
+
+        Args:
+            history: Full iteration history with diagnostics data
+
+        Returns:
+            Diagnostics dict if show_diagnostics is enabled, None otherwise
+        """
+        if not self.axes.show_diagnostics:
+            return None
+
+        if not history:
+            return None
+
+        last = history[-1]
+        if not hasattr(last, 'diagnostics') or not last.diagnostics:
+            return None
+
+        return last.diagnostics
+
     def build(
         self,
         current_config: Dict[str, Any],
@@ -163,6 +191,9 @@ class ContextBuilder:
         # Compute resource summary if enabled (sums pre-computed costs, no pricing formulas)
         resource_summary = self._compute_resource_summary(history)
 
+        # Get diagnostics if enabled (projects pre-computed diagnostics from last step)
+        diagnostics = self._get_diagnostics(history)
+
         # Construct and validate bundle (validation happens in __post_init__)
         return ContextBundle(
             current_config=current_config,
@@ -171,4 +202,5 @@ class ContextBuilder:
             task_description=task_desc,
             metric_description=metric_desc,
             resource_summary=resource_summary,
+            diagnostics=diagnostics,
         )
