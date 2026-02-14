@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -612,13 +613,15 @@ class BaseBenchmark(ABC):
         )
 
     def _write_run_summary(self, summary: RunSummary) -> None:
-        """Append run summary to JSONL file."""
+        """Append run summary to JSONL file with fsync for data integrity."""
         runs_dir = RUNS_ROOT / self.config.experiment_id
         runs_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = runs_dir / f"{self.benchmark_name}_runs.jsonl"
         with open(output_path, "a") as f:
             f.write(json.dumps(summary.to_dict()) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
 
     def run(self, run_id: Optional[str] = None) -> Dict[str, Any]:
         """
