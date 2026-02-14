@@ -12,7 +12,8 @@ Exports:
 """
 from __future__ import annotations
 
-from src.trace.logger import RunLogger, start_run, TRACES_ROOT
+from src.trace.logger import RunLogger, start_run
+from src.config.paths import TRACES_ROOT
 from src.trace.schema import TRACE_ONLY_FIELDS
 
 __all__ = [

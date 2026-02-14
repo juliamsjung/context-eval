@@ -38,6 +38,7 @@ class ContextBundle:
         task_description: Optional task context (gated by --show-task)
         metric_description: Optional metric context (gated by --show-metric)
         resource_summary: Optional resource usage (gated by --show-resources)
+        diagnostics: Optional execution diagnostics (gated by --show-diagnostics)
     """
     current_config: Dict[str, Any]
     latest_score: float
@@ -45,6 +46,7 @@ class ContextBundle:
     task_description: Optional[str] = None
     metric_description: Optional[str] = None
     resource_summary: Optional[Dict[str, Any]] = None
+    diagnostics: Optional[Dict[str, Any]] = None
 
     def __post_init__(self) -> None:
         """Validate no trace-only fields leaked into the bundle."""
@@ -92,4 +94,6 @@ class ContextBundle:
             result["metric_description"] = self.metric_description
         if self.resource_summary is not None:
             result["resource_summary"] = self.resource_summary
+        if self.diagnostics is not None:
+            result["diagnostics"] = self.diagnostics
         return result

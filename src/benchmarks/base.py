@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import hashlib
 
 try:
@@ -20,10 +20,13 @@ except ImportError:  # pragma: no cover
     OPENAI_AVAILABLE = False
 
 from src.utils.config import get_env_var
+from src.config.paths import RUNS_ROOT
 # TRACE ONLY imports
 from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
 from src.context import ContextBundle, ContextAxes, ContextBuilder
+# LOGGING LAYER imports
+from src.logging import RunSummary
 
 
 # Model pricing per million tokens (as of Jan 2025)
@@ -39,6 +42,112 @@ def _clamp(value: float, bounds: tuple[float, float]) -> float:
     """Clamp a value to the given bounds."""
     low, high = bounds
     return max(low, min(high, value))
+
+
+def _get_git_commit() -> Optional[str]:
+    """Get short git commit hash, or None if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def sanitize_with_clamp_tracking(
+    proposal: Dict[str, Any],
+    param_bounds: Dict[str, tuple[float, float]],
+    integer_keys: set[str],
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    Sanitize a config proposal by clamping values to bounds.
+
+    Args:
+        proposal: Raw config proposal from LLM
+        param_bounds: Dict mapping param names to (low, high) bounds
+        integer_keys: Set of param names that should be cast to int
+
+    Returns:
+        Tuple of (sanitized_config, clamp_events)
+    """
+    sanitized: Dict[str, Any] = {}
+    clamp_events: List[Dict[str, Any]] = []
+
+    for key, (low, high) in param_bounds.items():
+        if key not in proposal:
+            continue
+        try:
+            val = float(proposal[key])
+            if key in integer_keys:
+                # Round to int first, then clamp
+                rounded = int(round(val))
+                clamped = int(_clamp(rounded, (low, high)))
+            else:
+                clamped = _clamp(val, (low, high))
+            sanitized[key] = clamped
+
+            if val < low or val > high:
+                clamp_events.append({
+                    "parameter": key,
+                    "proposed": val,
+                    "executed": clamped,
+                })
+        except (ValueError, TypeError):
+            continue
+
+    return sanitized, clamp_events
+
+
+def format_resources_section(bundle: ContextBundle) -> str:
+    """Format the resources section for prompts."""
+    if not bundle.resource_summary:
+        return ""
+    rs = bundle.resource_summary
+    return (
+        f"### Resources\n"
+        f"tokens_current: {rs['tokens_current']}\n"
+        f"tokens_cumulative: {rs['tokens_cumulative']}\n"
+        f"cost_cumulative: {rs['cost_cumulative']}\n\n"
+    )
+
+
+def format_diagnostics_section(bundle: ContextBundle) -> str:
+    """Format the diagnostics section for prompts."""
+    if not bundle.diagnostics:
+        return ""
+    d = bundle.diagnostics
+    lines = ["### Diagnostics\n"]
+    clamp_events = d.get("clamp_events", [])
+    if clamp_events:
+        lines.append("clamp_events:\n")
+        for ce in clamp_events:
+            lines.append(
+                f"  - parameter: {ce['parameter']}\n"
+                f"    proposed: {ce['proposed']}\n"
+                f"    executed: {ce['executed']}\n"
+            )
+    else:
+        lines.append("clamp_events: []\n")
+    lines.append(f"parse_failure: {str(d.get('parse_failure', False)).lower()}\n")
+    lines.append(f"fallback_used: {str(d.get('fallback_used', False)).lower()}\n")
+    lines.append(f"truncated: {str(d.get('truncated', False)).lower()}\n\n")
+    return "".join(lines)
+
+
+def format_context_sections(bundle: ContextBundle) -> str:
+    """Format all optional context sections (task, metric, resources, diagnostics)."""
+    sections = []
+    if bundle.task_description:
+        sections.append(f"### Task Description\n{bundle.task_description}\n\n")
+    if bundle.metric_description:
+        sections.append(f"### Evaluation Metric\n{bundle.metric_description}\n\n")
+    sections.append(format_resources_section(bundle))
+    sections.append(format_diagnostics_section(bundle))
+    return "".join(sections)
 
 
 def _validate_dict_keys_no_trace_fields(data: Any, path: str = "root") -> None:
@@ -113,13 +222,15 @@ class BaseEnv(ABC):
 class BenchmarkConfig:
     """Configuration for a benchmark run."""
     num_steps: int = 3
-    history_window: int = 0
+    feedback_depth: int = 1
     seed: int = 0
     show_task: bool = False
     show_metric: bool = False
     show_resources: bool = False
+    show_diagnostics: bool = False
     model: str = "gpt-4o-mini"
     temperature: float = 0
+    experiment_id: str = "default"
     debug_show_llm: bool = False
     verbose: bool = False
 
@@ -128,13 +239,15 @@ class BenchmarkConfig:
         """Create config from argparse.Namespace."""
         return cls(
             num_steps=args.num_steps,
-            history_window=args.history_window,
+            feedback_depth=args.feedback_depth,
             seed=args.seed,
             show_task=args.show_task,
             show_metric=args.show_metric,
             show_resources=args.show_resources,
+            show_diagnostics=args.show_diagnostics,
             model=args.model,
             temperature=args.temperature,
+            experiment_id=args.experiment_id,
             debug_show_llm=args.debug_show_llm,
             verbose=args.verbose,
         )
@@ -148,6 +261,7 @@ class IterationResult:
     metrics: Dict[str, float]
     proposal_source: str  # "llm", "heuristic", "baseline"
     token_usage: Optional[Dict[str, int]] = None
+    diagnostics: Optional[Dict[str, Any]] = None
 
 
 class BaseBenchmark(ABC):
@@ -165,10 +279,11 @@ class BaseBenchmark(ABC):
         self.logger: Optional[RunLogger] = None
         # CONTEXT ONLY: Builder for agent-visible context bundles
         self._context_axes = ContextAxes(
-            history_window=config.history_window,
+            feedback_depth=config.feedback_depth,
             show_task=config.show_task,
             show_metric=config.show_metric,
             show_resources=config.show_resources,
+            show_diagnostics=config.show_diagnostics,
         )
         # Note: _context_builder is initialized lazily after workspace_path is available
         self._context_builder: Optional[ContextBuilder] = None
@@ -207,14 +322,22 @@ class BaseBenchmark(ABC):
         ...
 
     @abstractmethod
-    def sanitize_config(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and clamp proposed config to valid bounds."""
+    def sanitize_config(self, proposal: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """Validate and clamp proposed config to valid bounds.
+
+        Returns:
+            Tuple of (sanitized_config, clamp_events) where clamp_events is a list of
+            dicts with 'parameter', 'proposed', and 'executed' keys for any values
+            that were clamped.
+        """
         ...
 
-    @abstractmethod
     def _get_llm_system_prompt(self) -> str:
         """Return the system prompt for direct LLM calls."""
-        ...
+        return (
+            "You output ONLY valid JSON. "
+            "No explanations, no markdown, no text outside the JSON object."
+        )
 
     @abstractmethod
     def _build_llm_user_prompt(
@@ -285,8 +408,12 @@ class BaseBenchmark(ABC):
         current_config: Dict[str, Any],
         last_metrics: Dict[str, float],
         history: List[IterationResult],
-    ) -> tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, int]]]:
-        """Propose config using direct LLM call."""
+    ) -> Tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, Any]], bool, List[Dict[str, Any]]]:
+        """Propose config using direct LLM call.
+
+        Returns:
+            Tuple of (proposal, source, token_usage, parse_failure, clamp_events)
+        """
         return self._llm_propose(current_config, last_metrics, history)
 
     def _llm_propose(
@@ -294,26 +421,34 @@ class BaseBenchmark(ABC):
         current_config: Dict[str, Any],
         last_metrics: Dict[str, float],
         history: List[IterationResult],
-    ) -> tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, int]]]:
-        """Controller mode: direct LLM call."""
-        proposal, usage = self._direct_llm_propose(current_config, last_metrics, history)
+    ) -> Tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, Any]], bool, List[Dict[str, Any]]]:
+        """Controller mode: direct LLM call.
+
+        Returns:
+            Tuple of (proposal, source, token_usage, parse_failure, clamp_events)
+        """
+        proposal, usage, parse_failure, clamp_events = self._direct_llm_propose(current_config, last_metrics, history)
         if proposal:
-            return proposal, "llm", usage
-        return None, "heuristic", None
+            return proposal, "llm", usage, parse_failure, clamp_events
+        return None, "heuristic", usage, parse_failure, clamp_events
 
     def _direct_llm_propose(
         self,
         current_config: Dict[str, Any],
         last_metrics: Dict[str, float],
         history: List[IterationResult],
-    ) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        """Make direct LLM call to propose config."""
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], bool, List[Dict[str, Any]]]:
+        """Make direct LLM call to propose config.
+
+        Returns:
+            Tuple of (sanitized_config, usage, parse_failure, clamp_events)
+        """
         if not OPENAI_AVAILABLE:
-            return None, None
+            return None, None, False, []
 
         api_key = get_env_var("OPENAI_API_KEY")
         if not api_key:
-            return None, None
+            return None, None, False, []
 
         # CONTEXT ONLY: Build validated context bundle for agent
         bundle = self._build_context_bundle(current_config, last_metrics, history)
@@ -331,7 +466,7 @@ class BaseBenchmark(ABC):
         resp = client.chat.completions.create(
             model=self.config.model,
             temperature=self.config.temperature,
-            max_tokens=250,
+            max_tokens=150,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -370,10 +505,10 @@ class BaseBenchmark(ABC):
 
         parsed = safe_parse_json(content)
         if not parsed:
-            return None, usage
+            return None, usage, True, []
 
-        sanitized = self.sanitize_config(parsed)
-        return sanitized or None, usage
+        sanitized, clamp_events = self.sanitize_config(parsed)
+        return sanitized or None, usage, False, clamp_events
 
     def setup_logger(self, run_id: Optional[str] = None) -> RunLogger:
         """Initialize the run logger."""
@@ -411,6 +546,82 @@ class BaseBenchmark(ABC):
             "total_api_cost": round(total_cost, 6),
         }
 
+    def _is_higher_better(self) -> bool:
+        """Return True if higher scores are better. Subclasses can override."""
+        return True  # Default: higher is better (e.g., accuracy, AUC)
+
+    def _compute_run_summary(self, run_id: str) -> RunSummary:
+        """Compute aggregated run summary for analysis."""
+        # Performance: extract primary score from each step
+        scores = [self._get_primary_score(r.metrics) for r in self.history]
+        final_score = scores[-1]
+        best_score = max(scores) if self._is_higher_better() else min(scores)
+
+        # Efficiency: from _compute_run_totals()
+        run_totals = self._compute_run_totals()
+
+        # Diagnostics: aggregate counts from all steps
+        num_clamp_events = sum(
+            len(r.diagnostics.get("clamp_events", []))
+            for r in self.history if r.diagnostics
+        )
+        num_parse_failures = sum(
+            1 for r in self.history
+            if r.diagnostics and r.diagnostics.get("parse_failure", False)
+        )
+        num_fallbacks = sum(
+            1 for r in self.history
+            if r.diagnostics and r.diagnostics.get("fallback_used", False)
+        )
+        num_truncations = sum(
+            1 for r in self.history
+            if r.diagnostics and r.diagnostics.get("truncated", False)
+        )
+
+        # Compute axis signature for easy filtering
+        axis_signature = (
+            f"fd{self.config.feedback_depth}"
+            f"_t{int(self.config.show_task)}"
+            f"_m{int(self.config.show_metric)}"
+            f"_r{int(self.config.show_resources)}"
+            f"_d{int(self.config.show_diagnostics)}"
+        )
+
+        return RunSummary(
+            benchmark=self.benchmark_name,
+            seed=self.config.seed,
+            run_id=run_id,
+            experiment_id=self.config.experiment_id,
+            timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            git_commit=_get_git_commit(),
+            model_name=self.config.model,
+            temperature=self.config.temperature,
+            axis_signature=axis_signature,
+            feedback_depth=self.config.feedback_depth,
+            show_task=self.config.show_task,
+            show_metric=self.config.show_metric,
+            show_resources=self.config.show_resources,
+            show_diagnostics=self.config.show_diagnostics,
+            final_score=final_score,
+            best_score=best_score,
+            num_steps=self.config.num_steps,
+            total_tokens=run_totals["total_tokens"],
+            total_cost=run_totals["total_api_cost"],
+            num_clamp_events=num_clamp_events,
+            num_parse_failures=num_parse_failures,
+            num_fallbacks=num_fallbacks,
+            num_truncations=num_truncations,
+        )
+
+    def _write_run_summary(self, summary: RunSummary) -> None:
+        """Append run summary to JSONL file."""
+        runs_dir = RUNS_ROOT / self.config.experiment_id
+        runs_dir.mkdir(parents=True, exist_ok=True)
+
+        output_path = runs_dir / f"{self.benchmark_name}_runs.jsonl"
+        with open(output_path, "a") as f:
+            f.write(json.dumps(summary.to_dict()) + "\n")
+
     def run(self, run_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute the full benchmark run.
@@ -432,10 +643,11 @@ class BaseBenchmark(ABC):
             max_steps=self.config.num_steps,
             seed=self.config.seed,
             experiment_tags={
-                "history_window": self.config.history_window,
+                "feedback_depth": self.config.feedback_depth,
                 "show_task": self.config.show_task,
                 "show_metric": self.config.show_metric,
                 "show_resources": self.config.show_resources,
+                "show_diagnostics": self.config.show_diagnostics,
                 "model": self.config.model,
                 "temperature": self.config.temperature,
             },
@@ -463,20 +675,32 @@ class BaseBenchmark(ABC):
                 print(f"\n===> {self.benchmark_name} Step {step}/{self.config.num_steps}")
 
             # Propose new config
-            proposal, source, token_usage = self.propose_config(
+            proposal, source, token_usage, parse_failure, clamp_events = self.propose_config(
                 current_config,
                 self.history[-1].metrics,
                 self.history,
             )
 
+            fallback_used = False
             if proposal is None:
-                proposal = self.fallback_config(current_config, step)
+                fallback_proposal = self.fallback_config(current_config, step)
+                proposal, clamp_events = self.sanitize_config(fallback_proposal)
                 source = "heuristic"
-                token_usage = None
+                fallback_used = True
 
-            # Sanitize and apply
-            proposal = self.sanitize_config(proposal)
             current_config.update(proposal)
+
+            # Compute diagnostics (execution layer)
+            truncated = False
+            if token_usage:
+                truncated = token_usage.get("finish_reason") == "length"
+
+            diagnostics = {
+                "clamp_events": clamp_events,
+                "parse_failure": parse_failure,
+                "fallback_used": fallback_used,
+                "truncated": truncated,
+            }
 
             if self.config.verbose:
                 print(f"{source.upper()} proposal: {proposal}")
@@ -485,6 +709,7 @@ class BaseBenchmark(ABC):
                 "proposal": proposal,
                 "source": source,
                 "token_usage": token_usage,
+                "diagnostics": diagnostics,
             })
 
             # Run training
@@ -497,6 +722,7 @@ class BaseBenchmark(ABC):
                 metrics=metrics,
                 proposal_source=source,
                 token_usage=token_usage,
+                diagnostics=diagnostics,
             )
             self.history.append(result)
 
@@ -533,7 +759,6 @@ class BaseBenchmark(ABC):
             total_tokens=run_totals["total_tokens"],
             total_api_cost=run_totals["total_api_cost"],
             total_latency_sec=run_totals["total_latency_sec"],
-            details=final_result,
         )
 
         if self.config.verbose:
@@ -543,6 +768,10 @@ class BaseBenchmark(ABC):
         # Always print final score
         primary_metric = self._get_primary_score(self.history[-1].metrics)
         print(f"Final score: {primary_metric:.4f}")
+
+        # Write run summary (logging layer - post-hoc aggregation only)
+        summary = self._compute_run_summary(run_id or self.logger.run_id)
+        self._write_run_summary(summary)
 
         return final_result
 

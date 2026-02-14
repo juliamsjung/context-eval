@@ -20,6 +20,7 @@ class IterationResultProtocol(Protocol):
     config: Dict[str, Any]
     metrics: Dict[str, float]
     token_usage: Optional[Dict[str, Any]]
+    diagnostics: Optional[Dict[str, Any]]
 
 
 class ContextBuilder:
@@ -99,21 +100,47 @@ class ContextBuilder:
 
         total_tokens = 0
         total_cost = 0.0
-        total_latency = 0.0
-        call_count = 0
+        last_tokens = 0
 
         for entry in history:
             if hasattr(entry, 'token_usage') and entry.token_usage:
-                total_tokens += entry.token_usage.get("total_tokens", 0)
+                tokens = entry.token_usage.get("total_tokens", 0)
+                total_tokens += tokens
                 total_cost += entry.token_usage.get("api_cost", 0.0)  # Sum pre-computed cost
-                total_latency += entry.token_usage.get("latency_sec", 0.0)
-                call_count += 1
+                last_tokens = tokens  # Only update when we have valid token usage
 
         return {
-            "tokens_used_so_far": total_tokens,
-            "api_cost_so_far": round(total_cost, 6),
-            "mean_latency_sec": round(total_latency / call_count, 3) if call_count > 0 else 0.0,
+            "tokens_current": last_tokens,
+            "tokens_cumulative": total_tokens,
+            "cost_cumulative": round(total_cost, 6),
         }
+
+    def _get_diagnostics(
+        self, history: List[IterationResultProtocol]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        CONTEXT ONLY: Project diagnostics from most recent step.
+
+        This method only READS pre-computed diagnostics from IterationResult.
+        It NEVER computes truncation, parse_failure, etc. — that's the execution layer's job.
+
+        Args:
+            history: Full iteration history with diagnostics data
+
+        Returns:
+            Diagnostics dict if show_diagnostics is enabled, None otherwise
+        """
+        if not self.axes.show_diagnostics:
+            return None
+
+        if not history:
+            return None
+
+        last = history[-1]
+        if not hasattr(last, 'diagnostics') or not last.diagnostics:
+            return None
+
+        return last.diagnostics
 
     def build(
         self,
@@ -145,9 +172,12 @@ class ContextBuilder:
         latest_score = self.score_extractor(last_metrics)
 
         # Build windowed history with only agent-visible fields
+        # Exclude last entry (current step) since latest_score provides it
         recent_history: List[Dict[str, Any]] = []
-        if self.axes.history_window > 0:
-            for entry in history[-self.axes.history_window:]:
+        if self.axes.feedback_depth > 1:
+            num_prev = self.axes.feedback_depth - 1
+            prev_entries = history[-(num_prev + 1):-1]
+            for entry in prev_entries:
                 recent_history.append({
                     "step": entry.step,
                     "config": entry.config,
@@ -161,6 +191,9 @@ class ContextBuilder:
         # Compute resource summary if enabled (sums pre-computed costs, no pricing formulas)
         resource_summary = self._compute_resource_summary(history)
 
+        # Get diagnostics if enabled (projects pre-computed diagnostics from last step)
+        diagnostics = self._get_diagnostics(history)
+
         # Construct and validate bundle (validation happens in __post_init__)
         return ContextBundle(
             current_config=current_config,
@@ -169,4 +202,5 @@ class ContextBuilder:
             task_description=task_desc,
             metric_description=metric_desc,
             resource_summary=resource_summary,
+            diagnostics=diagnostics,
         )

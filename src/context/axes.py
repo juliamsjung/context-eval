@@ -18,17 +18,19 @@ class ContextAxes:
     information access.
 
     Attributes:
-        history_window: Number of past iterations to include (0 = none)
+        feedback_depth: Number of visible outcome signals (1=current only, 5=current+4 history)
         show_task: Whether to include task_description.txt content
         show_metric: Whether to include metric_description.txt content
         show_resources: Whether to include resource usage (tokens, cost, latency)
+        show_diagnostics: Whether to include execution diagnostics (clamp events, parse failures, etc.)
     """
-    history_window: int = 0
+    feedback_depth: int = 1
     show_task: bool = False
     show_metric: bool = False
     show_resources: bool = False
+    show_diagnostics: bool = False
 
     def __post_init__(self) -> None:
         """Validate axis values."""
-        if self.history_window < 0:
-            raise ValueError(f"history_window must be >= 0, got {self.history_window}")
+        if self.feedback_depth < 1:
+            raise ValueError(f"feedback_depth must be >= 1, got {self.feedback_depth}")

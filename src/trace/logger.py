@@ -12,8 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# Root directory for all traces - can be overridden by CLI
-TRACES_ROOT = Path("traces")
+from src.config.paths import TRACES_ROOT
 
 
 def _now_iso() -> str:
