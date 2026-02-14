@@ -25,7 +25,7 @@ from src.config.paths import RUNS_ROOT
 # TRACE ONLY imports
 from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
-from src.context import ContextBundle, ContextAxes, ContextBuilder
+from src.context import ContextBundle, ContextAxes, ContextBuilder, format_context_sections
 # LOGGING LAYER imports
 from src.logging import RunSummary
 
@@ -101,54 +101,6 @@ def sanitize_with_clamp_tracking(
             continue
 
     return sanitized, clamp_events
-
-
-def format_resources_section(bundle: ContextBundle) -> str:
-    """Format the resources section for prompts."""
-    if not bundle.resource_summary:
-        return ""
-    rs = bundle.resource_summary
-    return (
-        f"### Resources\n"
-        f"tokens_current: {rs['tokens_current']}\n"
-        f"tokens_cumulative: {rs['tokens_cumulative']}\n"
-        f"cost_cumulative: {rs['cost_cumulative']}\n\n"
-    )
-
-
-def format_diagnostics_section(bundle: ContextBundle) -> str:
-    """Format the diagnostics section for prompts."""
-    if not bundle.diagnostics:
-        return ""
-    d = bundle.diagnostics
-    lines = ["### Diagnostics\n"]
-    clamp_events = d.get("clamp_events", [])
-    if clamp_events:
-        lines.append("clamp_events:\n")
-        for ce in clamp_events:
-            lines.append(
-                f"  - parameter: {ce['parameter']}\n"
-                f"    proposed: {ce['proposed']}\n"
-                f"    executed: {ce['executed']}\n"
-            )
-    else:
-        lines.append("clamp_events: []\n")
-    lines.append(f"parse_failure: {str(d.get('parse_failure', False)).lower()}\n")
-    lines.append(f"fallback_used: {str(d.get('fallback_used', False)).lower()}\n")
-    lines.append(f"truncated: {str(d.get('truncated', False)).lower()}\n\n")
-    return "".join(lines)
-
-
-def format_context_sections(bundle: ContextBundle) -> str:
-    """Format all optional context sections (task, metric, resources, diagnostics)."""
-    sections = []
-    if bundle.task_description:
-        sections.append(f"### Task Description\n{bundle.task_description}\n\n")
-    if bundle.metric_description:
-        sections.append(f"### Evaluation Metric\n{bundle.metric_description}\n\n")
-    sections.append(format_resources_section(bundle))
-    sections.append(format_diagnostics_section(bundle))
-    return "".join(sections)
 
 
 def _validate_dict_keys_no_trace_fields(data: Any, path: str = "root") -> None:
@@ -340,7 +292,35 @@ class BaseBenchmark(ABC):
             "No explanations, no markdown, no text outside the JSON object."
         )
 
+    @property
     @abstractmethod
+    def param_bounds(self) -> Dict[str, Tuple[float, float]]:
+        """Return parameter bounds dict for this benchmark."""
+        ...
+
+    @abstractmethod
+    def _get_task_intro(self) -> str:
+        """Return task-specific introduction text."""
+        ...
+
+    def _filter_config_for_prompt(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter config for prompt display. Default includes all param_bounds keys."""
+        return {k: config.get(k) for k in self.param_bounds.keys()}
+
+    def _format_history_entry(self, entry: Dict[str, Any]) -> str:
+        """Format a single history entry. Default iterates param_bounds keys."""
+        param_strs = [
+            f"{k}={v}"
+            for k, v in entry['config'].items()
+            if k in self.param_bounds
+        ]
+        return f"- step {entry['step']}: score={entry['score']:.4f}, " + ", ".join(param_strs)
+
+    @abstractmethod
+    def _get_output_format_instructions(self) -> str:
+        """Return output format instructions text (e.g., 'Values must be numeric.')."""
+        ...
+
     def _build_llm_user_prompt(
         self,
         bundle: ContextBundle,
@@ -348,13 +328,35 @@ class BaseBenchmark(ABC):
         """
         CONTEXT ONLY: Build the user prompt for direct LLM calls.
 
+        Common implementation that preserves exact formatting across benchmarks.
+        Subclasses customize via abstract methods: _get_task_intro(), param_bounds,
+        _format_history_entry(), _get_output_format_instructions().
+
         Args:
             bundle: Validated ContextBundle containing only agent-visible data
 
         Returns:
             Formatted prompt string for the LLM
         """
-        ...
+        filtered_config = self._filter_config_for_prompt(bundle.current_config)
+
+        prompt = f"### Task\n{self._get_task_intro()}\n\n"
+        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
+        prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
+
+        if bundle.recent_history:
+            history_lines = "\n".join(
+                self._format_history_entry(e) for e in bundle.recent_history
+            )
+            prompt += f"### History\n{history_lines}\n\n"
+
+        prompt += format_context_sections(bundle)
+        prompt += (
+            "### Output Format\n"
+            f"Return JSON with exactly these keys: {list(self.param_bounds.keys())}.\n"
+            f"{self._get_output_format_instructions()}"
+        )
+        return prompt
 
     @property
     def workspace_path(self) -> Path:

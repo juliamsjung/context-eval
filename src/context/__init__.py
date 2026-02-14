@@ -9,16 +9,19 @@ Exports:
     - ContextAxes: Visibility axis configuration
     - ContextBuilder: Builder for constructing validated context bundles
     - ContextLeakageError: Exception raised when trace data leaks
+    - format_context_sections: Format context bundle sections for prompts
 """
 from __future__ import annotations
 
 from src.context.schema import ContextBundle, ContextLeakageError
 from src.context.axes import ContextAxes
 from src.context.builder import ContextBuilder
+from src.context.formatter import format_context_sections
 
 __all__ = [
     "ContextBundle",
     "ContextAxes",
     "ContextBuilder",
     "ContextLeakageError",
+    "format_context_sections",
 ]
