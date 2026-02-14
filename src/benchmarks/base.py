@@ -709,6 +709,7 @@ class BaseBenchmark(ABC):
                 "proposal": proposal,
                 "source": source,
                 "token_usage": token_usage,
+                "diagnostics": diagnostics,
             })
 
             # Run training
@@ -758,7 +759,6 @@ class BaseBenchmark(ABC):
             total_tokens=run_totals["total_tokens"],
             total_api_cost=run_totals["total_api_cost"],
             total_latency_sec=run_totals["total_latency_sec"],
-            details=final_result,
         )
 
         if self.config.verbose:
