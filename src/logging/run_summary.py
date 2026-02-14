@@ -12,6 +12,7 @@ class RunSummary:
     benchmark: str
     seed: int
     run_id: str
+    experiment_id: str  # Filesystem-safe identifier for grouping runs
     timestamp: str  # ISO-8601 format
     git_commit: Optional[str]  # Short SHA for reproducibility
 
@@ -30,7 +31,7 @@ class RunSummary:
     # Performance
     final_score: float
     best_score: float
-    num_steps_executed: int
+    num_steps: int
 
     # Efficiency
     total_tokens: int

@@ -17,6 +17,7 @@ class TestRunSummary:
             benchmark="toy",
             seed=0,
             run_id="test_run",
+            experiment_id="default",
             timestamp="2026-01-15T12:00:00Z",
             git_commit="abc1234",
             model_name="gpt-4o-mini",
@@ -29,7 +30,7 @@ class TestRunSummary:
             show_diagnostics=False,
             final_score=0.85,
             best_score=0.87,
-            num_steps_executed=5,
+            num_steps=5,
             total_tokens=1000,
             total_cost=0.001,
             num_clamp_events=2,
@@ -44,7 +45,7 @@ class TestRunSummary:
         assert d["axis_signature"] == "fd1_t0_m0_r0_d0"
         assert d["final_score"] == 0.85
         assert d["best_score"] == 0.87
-        assert d["num_steps_executed"] == 5
+        assert d["num_steps"] == 5
         assert d["total_tokens"] == 1000
         assert d["num_clamp_events"] == 2
         assert d["num_parse_failures"] == 1
@@ -54,6 +55,7 @@ class TestRunSummary:
             benchmark="nomad",
             seed=42,
             run_id="test",
+            experiment_id="grid_2026-01-15",
             timestamp="2026-01-15T12:00:00Z",
             git_commit=None,
             model_name="gpt-4o",
@@ -66,7 +68,7 @@ class TestRunSummary:
             show_diagnostics=True,
             final_score=0.123,
             best_score=0.100,
-            num_steps_executed=10,
+            num_steps=10,
             total_tokens=5000,
             total_cost=0.05,
             num_clamp_events=0,
@@ -181,12 +183,13 @@ class TestRunSummaryFileOutput:
             output_path = runs_dir / "toy_runs.jsonl"
             summary = RunSummary(
                 benchmark="toy", seed=0, run_id="test",
+                experiment_id="default",
                 timestamp="2026-01-15T12:00:00Z", git_commit="abc1234",
                 model_name="gpt-4o-mini", temperature=0.0,
                 axis_signature="fd1_t0_m0_r0_d0",
                 feedback_depth=1, show_task=False, show_metric=False,
                 show_resources=False, show_diagnostics=False,
-                final_score=0.8, best_score=0.85, num_steps_executed=3,
+                final_score=0.8, best_score=0.85, num_steps=3,
                 total_tokens=100, total_cost=0.001,
                 num_clamp_events=0, num_parse_failures=0,
                 num_fallbacks=0, num_truncations=0,
@@ -210,13 +213,14 @@ class TestRunSummaryFileOutput:
             for seed in [0, 1, 2]:
                 summary = RunSummary(
                     benchmark="toy", seed=seed, run_id=f"run_{seed}",
+                    experiment_id="default",
                     timestamp="2026-01-15T12:00:00Z", git_commit="abc1234",
                     model_name="gpt-4o-mini", temperature=0.0,
                     axis_signature="fd1_t0_m0_r0_d0",
                     feedback_depth=1, show_task=False, show_metric=False,
                     show_resources=False, show_diagnostics=False,
                     final_score=0.8 + seed * 0.01, best_score=0.85,
-                    num_steps_executed=3,
+                    num_steps=3,
                     total_tokens=100, total_cost=0.001,
                     num_clamp_events=0, num_parse_failures=0,
                     num_fallbacks=0, num_truncations=0,

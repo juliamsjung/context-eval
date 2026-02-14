@@ -61,6 +61,7 @@ esac
 PYTHON="${PYTHON:-python}"
 PYTHON_SCRIPT="run_${BENCHMARK}_bench.py"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+EXPERIMENT_ID="grid_${TIMESTAMP}"
 TOTAL=96
 FAILED_CONFIGS=()
 
@@ -91,6 +92,7 @@ for feedback_depth in 1 5; do
                             --feedback-depth $feedback_depth \
                             --seed $seed \
                             --run-id $run_id \
+                            --experiment-id $EXPERIMENT_ID \
                             $task_flag $metric_flag $resources_flag $diagnostics_flag"
 
                         if $DRY_RUN; then

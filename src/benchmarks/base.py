@@ -230,6 +230,7 @@ class BenchmarkConfig:
     show_diagnostics: bool = False
     model: str = "gpt-4o-mini"
     temperature: float = 0
+    experiment_id: str = "default"
     debug_show_llm: bool = False
     verbose: bool = False
 
@@ -246,6 +247,7 @@ class BenchmarkConfig:
             show_diagnostics=args.show_diagnostics,
             model=args.model,
             temperature=args.temperature,
+            experiment_id=args.experiment_id,
             debug_show_llm=args.debug_show_llm,
             verbose=args.verbose,
         )
@@ -589,6 +591,7 @@ class BaseBenchmark(ABC):
             benchmark=self.benchmark_name,
             seed=self.config.seed,
             run_id=run_id,
+            experiment_id=self.config.experiment_id,
             timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
             git_commit=_get_git_commit(),
             model_name=self.config.model,
@@ -601,7 +604,7 @@ class BaseBenchmark(ABC):
             show_diagnostics=self.config.show_diagnostics,
             final_score=final_score,
             best_score=best_score,
-            num_steps_executed=len(self.history),
+            num_steps=self.config.num_steps,
             total_tokens=run_totals["total_tokens"],
             total_cost=run_totals["total_api_cost"],
             num_clamp_events=num_clamp_events,
@@ -612,7 +615,7 @@ class BaseBenchmark(ABC):
 
     def _write_run_summary(self, summary: RunSummary) -> None:
         """Append run summary to JSONL file."""
-        runs_dir = RUNS_ROOT
+        runs_dir = RUNS_ROOT / self.config.experiment_id
         runs_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = runs_dir / f"{self.benchmark_name}_runs.jsonl"

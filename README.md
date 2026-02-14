@@ -19,7 +19,7 @@ python run_nomad_bench.py --num-steps 5 --show-task --show-metric
 ./scripts/run_grid.sh nomad
 ```
 
-Results saved to `traces/{benchmark}/{timestamp}/`.
+Results saved to `logs/` (traces in `logs/traces/`, run summaries in `logs/runs/`).
 
 ---
 
@@ -156,6 +156,7 @@ These flags control what information the LLM agent sees:
 | `--num-steps` | 3 | Number of optimization iterations |
 | `--seed` | 0 | Random seed for reproducibility |
 | `--run-id` | auto | Custom run identifier |
+| `--experiment-id` | default | Experiment ID for grouping runs (must be filesystem-safe: `[a-zA-Z0-9_-]+`) |
 | `--model` | gpt-4o-mini | LLM model to use |
 | `--temperature` | 0 | LLM temperature setting |
 

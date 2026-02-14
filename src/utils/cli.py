@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import re
+import sys
 
 
 
@@ -23,6 +25,8 @@ def parse_benchmark_args(
     parser.add_argument("--num-steps", type=int, default=3, help="Number of tuning steps (default: 3).")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducibility.")
     parser.add_argument("--run-id", type=str, help="Custom run ID for batch tracking.")
+    parser.add_argument("--experiment-id", type=str, default="default",
+                        help="Experiment ID for grouping runs (default: default). Must be filesystem-safe: [a-zA-Z0-9_-]+")
 
     # Experimental controls (model, temperature)
     parser.add_argument("--model", type=str, default="gpt-4o-mini",
@@ -42,5 +46,12 @@ def parse_benchmark_args(
     parser.add_argument("--debug-show-llm", action="store_true", help="Print full LLM request and response for debugging.")
     parser.add_argument("--verbose", action="store_true", help="Enable step-by-step logging.")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Validate experiment_id is filesystem-safe
+    if not re.match(r"^[a-zA-Z0-9_\-]+$", args.experiment_id):
+        print(f"Error: --experiment-id must match [a-zA-Z0-9_-]+, got: {args.experiment_id!r}", file=sys.stderr)
+        sys.exit(1)
+
+    return args
 
