@@ -552,31 +552,29 @@ class BaseBenchmark(ABC):
 
     def _compute_run_summary(self, run_id: str) -> RunSummary:
         """Compute aggregated run summary for analysis."""
-        # Performance: extract primary score from each step
-        scores = [self._get_primary_score(r.metrics) for r in self.history]
-        final_score = scores[-1]
-        best_score = max(scores) if self._is_higher_better() else min(scores)
+        scores = []
+        total_input = total_output = 0
+        total_latency = 0.0
+        num_clamp_events = num_parse_failures = num_fallbacks = num_truncations = 0
 
-        # Efficiency: from _compute_run_totals()
-        run_totals = self._compute_run_totals()
+        for r in self.history:
+            scores.append(self._get_primary_score(r.metrics))
+            if r.token_usage and isinstance(r.token_usage, dict):
+                total_input += r.token_usage.get("input_tokens", 0)
+                total_output += r.token_usage.get("output_tokens", 0)
+                total_latency += r.token_usage.get("latency_sec", 0.0)
+            if r.diagnostics:
+                num_clamp_events += len(r.diagnostics.get("clamp_events", []))
+                num_parse_failures += int(r.diagnostics.get("parse_failure", False))
+                num_fallbacks += int(r.diagnostics.get("fallback_used", False))
+                num_truncations += int(r.diagnostics.get("truncated", False))
 
-        # Diagnostics: aggregate counts from all steps
-        num_clamp_events = sum(
-            len(r.diagnostics.get("clamp_events", []))
-            for r in self.history if r.diagnostics
-        )
-        num_parse_failures = sum(
-            1 for r in self.history
-            if r.diagnostics and r.diagnostics.get("parse_failure", False)
-        )
-        num_fallbacks = sum(
-            1 for r in self.history
-            if r.diagnostics and r.diagnostics.get("fallback_used", False)
-        )
-        num_truncations = sum(
-            1 for r in self.history
-            if r.diagnostics and r.diagnostics.get("truncated", False)
-        )
+        final_score = scores[-1] if scores else 0.0
+        best_score = (max(scores) if self._is_higher_better() else min(scores)) if scores else 0.0
+        total_tokens = total_input + total_output
+
+        pricing = MODEL_PRICING.get(self.config.model, MODEL_PRICING[DEFAULT_MODEL])
+        total_cost = (total_input * pricing["input"] + total_output * pricing["output"]) / 1_000_000
 
         # Compute axis signature for easy filtering
         axis_signature = (
@@ -605,8 +603,8 @@ class BaseBenchmark(ABC):
             final_score=final_score,
             best_score=best_score,
             num_steps=self.config.num_steps,
-            total_tokens=run_totals["total_tokens"],
-            total_cost=run_totals["total_api_cost"],
+            total_tokens=total_tokens,
+            total_cost=round(total_cost, 6),
             num_clamp_events=num_clamp_events,
             num_parse_failures=num_parse_failures,
             num_fallbacks=num_fallbacks,

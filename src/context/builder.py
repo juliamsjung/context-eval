@@ -103,7 +103,7 @@ class ContextBuilder:
         last_tokens = 0
 
         for entry in history:
-            if hasattr(entry, 'token_usage') and entry.token_usage:
+            if hasattr(entry, 'token_usage') and entry.token_usage and isinstance(entry.token_usage, dict):
                 tokens = entry.token_usage.get("total_tokens", 0)
                 total_tokens += tokens
                 total_cost += entry.token_usage.get("api_cost", 0.0)  # Sum pre-computed cost
@@ -174,9 +174,9 @@ class ContextBuilder:
         # Build windowed history with only agent-visible fields
         # Exclude last entry (current step) since latest_score provides it
         recent_history: List[Dict[str, Any]] = []
-        if self.axes.feedback_depth > 1:
-            num_prev = self.axes.feedback_depth - 1
-            prev_entries = history[-(num_prev + 1):-1]
+        if self.axes.feedback_depth > 1 and len(history) > 1:
+            num_prev = min(self.axes.feedback_depth - 1, len(history) - 1)
+            prev_entries = history[-num_prev - 1:-1]
             for entry in prev_entries:
                 recent_history.append({
                     "step": entry.step,
