@@ -1,18 +1,14 @@
 """NOMAD benchmark implementation."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from typing import Tuple
 from src.benchmarks.base import (
     BaseBenchmark, BenchmarkConfig, _clamp,
-    sanitize_with_clamp_tracking, format_context_sections,
+    sanitize_with_clamp_tracking,
 )
 from src.benchmarks.nomad.env import NomadEnv
-# CONTEXT ONLY import
-from src.context import ContextBundle
 
 
 PARAM_BOUNDS = {
@@ -110,32 +106,22 @@ class NomadBenchmark(BaseBenchmark):
         """RMSLE: lower is better."""
         return False
 
-    def _build_llm_user_prompt(
-        self,
-        bundle: ContextBundle,
-    ) -> str:
-        """CONTEXT ONLY: Build the user prompt from a validated ContextBundle."""
-        filtered_config = {k: bundle.current_config.get(k) for k in PARAM_BOUNDS.keys() if k in bundle.current_config}
+    @property
+    def param_bounds(self) -> Dict[str, Tuple[float, float]]:
+        """Return parameter bounds for this benchmark."""
+        return PARAM_BOUNDS
 
-        prompt = "### Task\nYou are tuning a HistGradientBoostingRegressor.\n\n"
-        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
-        prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
+    def _filter_config_for_prompt(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter config, excluding keys not present in config (preserves exact formatting)."""
+        return {k: config.get(k) for k in self.param_bounds.keys() if k in config}
 
-        if bundle.recent_history:
-            history_lines = "\n".join(
-                f"- step {e['step']}: score={e['score']:.4f}, "
-                + ", ".join(f"{k}={v}" for k, v in e['config'].items() if k in PARAM_BOUNDS)
-                for e in bundle.recent_history
-            )
-            prompt += f"### History\n{history_lines}\n\n"
+    def _get_task_intro(self) -> str:
+        """Return task-specific introduction text."""
+        return "You are tuning a HistGradientBoostingRegressor."
 
-        prompt += format_context_sections(bundle)
-        prompt += (
-            "### Output Format\n"
-            f"Return JSON with exactly these keys: {list(PARAM_BOUNDS.keys())}.\n"
-            "Values must be numeric and within reasonable ranges."
-        )
-        return prompt
+    def _get_output_format_instructions(self) -> str:
+        """Return output format instructions."""
+        return "Values must be numeric and within reasonable ranges."
 
 
 def run_nomad_bench(args, run_id: Optional[str] = None) -> Dict[str, Any]:

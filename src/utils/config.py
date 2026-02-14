@@ -1,10 +1,9 @@
 """Configuration and environment utilities."""
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 DEFAULT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 
@@ -61,8 +60,3 @@ def get_env_var(key: str, default: Optional[str] = None) -> Optional[str]:
     if key in _ENV_VARS:
         return _ENV_VARS[key]
     return os.environ.get(key, default)
-
-
-def load_config(path: str) -> Dict[str, Any]:
-    """Load configuration from JSON file."""
-    return json.loads(Path(path).read_text())

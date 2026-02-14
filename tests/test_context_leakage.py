@@ -258,6 +258,30 @@ class TestContextBuilder:
 
         assert bundle.recent_history == []
 
+    def test_feedback_depth_exceeds_history_length(self):
+        """Verify graceful handling when feedback_depth > history length."""
+        def score_extractor(metrics):
+            return metrics.get("score", 0.0)
+
+        axes = ContextAxes(feedback_depth=10)  # Request 10 but only 2 available
+        builder = ContextBuilder(axes=axes, score_extractor=score_extractor)
+
+        class MockIterationResult:
+            def __init__(self, step, config, metrics):
+                self.step = step
+                self.config = config
+                self.metrics = metrics
+                self.token_usage = None
+
+        history = [
+            MockIterationResult(step=0, config={"x": 1}, metrics={"score": 0.5}),
+            MockIterationResult(step=1, config={"x": 2}, metrics={"score": 0.6}),
+        ]
+        bundle = builder.build({"x": 3}, {"score": 0.7}, history)
+        # Should return 1 history entry (all available minus current)
+        assert len(bundle.recent_history) == 1
+        assert bundle.recent_history[0]["step"] == 0
+
 
 class TestResourceSummaryGating:
     """Tests for resource summary visibility gating."""
@@ -649,8 +673,8 @@ class TestDiagnosticsGating:
         assert bundle.diagnostics is not None
         assert bundle.diagnostics["clamp_events"] == []
 
-    def test_diagnostics_empty_history_returns_none(self):
-        """diagnostics should be None when history is empty."""
+    def test_diagnostics_empty_history_returns_default(self):
+        """diagnostics should return default values when history is empty (consistent prompt structure)."""
         def score_extractor(metrics):
             return metrics.get("accuracy", 0.0)
 
@@ -665,7 +689,11 @@ class TestDiagnosticsGating:
             history=[],
         )
 
-        assert bundle.diagnostics is None
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["clamp_events"] == []
+        assert bundle.diagnostics["parse_failure"] is False
+        assert bundle.diagnostics["fallback_used"] is False
+        assert bundle.diagnostics["truncated"] is False
 
     def test_diagnostics_in_to_dict(self):
         """diagnostics should appear in to_dict() when present."""
@@ -696,7 +724,7 @@ class TestDiagnosticsGating:
         assert "diagnostics" not in result
 
     def test_diagnostics_no_diagnostics_field_in_history(self):
-        """diagnostics should be None when history entries lack diagnostics field."""
+        """diagnostics should return default values when history entries lack diagnostics (consistent prompt structure)."""
         def score_extractor(metrics):
             return metrics.get("accuracy", 0.0)
 
@@ -718,4 +746,6 @@ class TestDiagnosticsGating:
             history=[FakeResultWithoutDiagnostics()],
         )
 
-        assert bundle.diagnostics is None
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["clamp_events"] == []
+        assert bundle.diagnostics["parse_failure"] is False
