@@ -673,8 +673,8 @@ class TestDiagnosticsGating:
         assert bundle.diagnostics is not None
         assert bundle.diagnostics["clamp_events"] == []
 
-    def test_diagnostics_empty_history_returns_none(self):
-        """diagnostics should be None when history is empty."""
+    def test_diagnostics_empty_history_returns_default(self):
+        """diagnostics should return default values when history is empty (consistent prompt structure)."""
         def score_extractor(metrics):
             return metrics.get("accuracy", 0.0)
 
@@ -689,7 +689,11 @@ class TestDiagnosticsGating:
             history=[],
         )
 
-        assert bundle.diagnostics is None
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["clamp_events"] == []
+        assert bundle.diagnostics["parse_failure"] is False
+        assert bundle.diagnostics["fallback_used"] is False
+        assert bundle.diagnostics["truncated"] is False
 
     def test_diagnostics_in_to_dict(self):
         """diagnostics should appear in to_dict() when present."""
@@ -720,7 +724,7 @@ class TestDiagnosticsGating:
         assert "diagnostics" not in result
 
     def test_diagnostics_no_diagnostics_field_in_history(self):
-        """diagnostics should be None when history entries lack diagnostics field."""
+        """diagnostics should return default values when history entries lack diagnostics (consistent prompt structure)."""
         def score_extractor(metrics):
             return metrics.get("accuracy", 0.0)
 
@@ -742,4 +746,6 @@ class TestDiagnosticsGating:
             history=[FakeResultWithoutDiagnostics()],
         )
 
-        assert bundle.diagnostics is None
+        assert bundle.diagnostics is not None
+        assert bundle.diagnostics["clamp_events"] == []
+        assert bundle.diagnostics["parse_failure"] is False

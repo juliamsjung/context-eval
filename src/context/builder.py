@@ -128,17 +128,27 @@ class ContextBuilder:
             history: Full iteration history with diagnostics data
 
         Returns:
-            Diagnostics dict if show_diagnostics is enabled, None otherwise
+            Diagnostics dict if show_diagnostics is enabled, None otherwise.
+            Returns default empty diagnostics if enabled but no diagnostics exist
+            (e.g., after baseline step 0) to maintain consistent prompt structure.
         """
         if not self.axes.show_diagnostics:
             return None
 
+        # Default diagnostics for consistent prompt structure
+        default_diagnostics = {
+            "clamp_events": [],
+            "parse_failure": False,
+            "fallback_used": False,
+            "truncated": False,
+        }
+
         if not history:
-            return None
+            return default_diagnostics
 
         last = history[-1]
         if not hasattr(last, 'diagnostics') or not last.diagnostics:
-            return None
+            return default_diagnostics
 
         return last.diagnostics
 
