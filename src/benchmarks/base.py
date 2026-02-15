@@ -24,6 +24,8 @@ from src.utils.config import get_env_var
 from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
 from src.context import ContextBundle, ContextAxes, ContextBuilder
+# Behavioral metrics
+from src.metrics import StabilityMetric
 
 
 # Model pricing per million tokens (as of Jan 2025)
@@ -517,12 +519,18 @@ class BaseBenchmark(ABC):
         # Finalize
         run_totals = self._compute_run_totals()
 
+        history_dicts = [self._result_to_dict(r) for r in self.history]
+
+        # Behavioral stability metrics computed over the full trajectory
+        stability_metrics = StabilityMetric().evaluate_trace(history_dicts)
+
         final_result = {
-            "history": [self._result_to_dict(r) for r in self.history],
+            "history": history_dicts,
             "final_config": current_config,
             "final_metrics": self.history[-1].metrics,
             "total_steps": len(self.history),
             "task_metrics": run_totals,
+            "stability_metrics": stability_metrics,
         }
 
         self.logger.log_run_end(

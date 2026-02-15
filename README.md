@@ -175,3 +175,65 @@ These flags control what information the LLM agent sees:
 | `run_nomad_bench.py` | NOMAD 2018 | Materials science regression |
 | `run_jigsaw_bench.py` | Jigsaw Toxic Comments | Multi-label text classification |
 
+---
+
+## Behavioral Stability Metrics
+
+Every benchmark run automatically computes **stability metrics** over the agent's full configuration trajectory. These are behavioral measures of _how_ the agent searched, independent of the final benchmark score.
+
+Results appear under `stability_metrics` in the run output dict and in trace logs.
+
+### Configuration Churn
+
+Measures how much the agent changes its configuration at each step. Each hyperparameter contributes independently:
+
+- **Numerical** (`int` / `float`): fractional difference relative to the larger magnitude — `|a − b| / (max(|a|, |b|) + ε)` — giving a value in `[0, 1]` per parameter.
+- **Categorical / string**: binary penalty of `1.0` if the value changed, `0.0` if not.
+- **Missing in one config**: treated as a categorical change (`1.0`).
+
+Distances are summed across all keys to produce a per-step churn score, then averaged over the run.
+
+### Instability Score (Oscillation)
+
+Detects when the agent revisits a previously-seen configuration. Each step whose hyperparameter dict (compared by canonical JSON hash) has been seen before in the trace is counted as a _repeated_ step.
+
+```
+instability_score = repeated_steps / total_steps
+```
+
+A score of `0.0` means every step was a novel configuration; `1.0` means every step revisited a prior configuration.
+
+### Output Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `instability_score` | float | Fraction of steps that revisit a prior configuration |
+| `average_churn` | float | Mean step-to-step config distance across the run |
+| `total_churn` | float | Unnormalised sum of all pairwise distances |
+| `total_steps` | int | Steps in the trace (including baseline step 0) |
+| `churn_steps` | int | Consecutive pairs evaluated (`total_steps − 1`) |
+
+### Implementation
+
+```
+src/metrics/
+├── __init__.py
+└── stability.py   # StabilityMetric class
+```
+
+`StabilityMetric` is stateless and can be used standalone:
+
+```python
+from src.metrics import StabilityMetric
+
+metric = StabilityMetric()
+
+# Pairwise distance between two configs
+dist, changed_keys = metric.calculate_config_distance(config_a, config_b)
+
+# Full trace evaluation (list of dicts with a 'config' key)
+result = metric.evaluate_trace(trace_history)
+# {'instability_score': 0.25, 'average_churn': 0.6, 'total_churn': 1.8,
+#  'total_steps': 4, 'churn_steps': 3}
+```
+
