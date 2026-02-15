@@ -97,7 +97,9 @@ outputs/
 data/
 
 # Experiment analysis (local only)
-experiments/
+# Ignore experiment outputs but allow metrics code
+experiments/*
+!experiments/metrics/
 
 # Generated plots (analysis artifacts)
 *.png
