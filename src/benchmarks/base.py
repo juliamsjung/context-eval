@@ -23,11 +23,9 @@ except ImportError:  # pragma: no cover
 from src.utils.config import get_env_var
 from src.config.paths import RUNS_ROOT
 # TRACE ONLY imports
-from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
+from src.trace import RunLogger, start_run, RunSummary, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
 from src.context import ContextBundle, ContextAxes, ContextBuilder, format_context_sections
-# LOGGING LAYER imports
-from src.logging import RunSummary
 
 
 # Model pricing per million tokens (as of Jan 2025)

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.logging import RunSummary
+from src.trace import RunSummary
 
 
 class TestRunSummary:
