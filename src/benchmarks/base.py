@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,11 +23,9 @@ except ImportError:  # pragma: no cover
 from src.utils.config import get_env_var
 from src.config.paths import RUNS_ROOT
 # TRACE ONLY imports
-from src.trace import RunLogger, start_run, TRACE_ONLY_FIELDS
+from src.trace import RunLogger, start_run, RunSummary, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
-from src.context import ContextBundle, ContextAxes, ContextBuilder
-# LOGGING LAYER imports
-from src.logging import RunSummary
+from src.context import ContextBundle, ContextAxes, ContextBuilder, format_context_sections
 
 
 # Model pricing per million tokens (as of Jan 2025)
@@ -100,54 +99,6 @@ def sanitize_with_clamp_tracking(
             continue
 
     return sanitized, clamp_events
-
-
-def format_resources_section(bundle: ContextBundle) -> str:
-    """Format the resources section for prompts."""
-    if not bundle.resource_summary:
-        return ""
-    rs = bundle.resource_summary
-    return (
-        f"### Resources\n"
-        f"tokens_current: {rs['tokens_current']}\n"
-        f"tokens_cumulative: {rs['tokens_cumulative']}\n"
-        f"cost_cumulative: {rs['cost_cumulative']}\n\n"
-    )
-
-
-def format_diagnostics_section(bundle: ContextBundle) -> str:
-    """Format the diagnostics section for prompts."""
-    if not bundle.diagnostics:
-        return ""
-    d = bundle.diagnostics
-    lines = ["### Diagnostics\n"]
-    clamp_events = d.get("clamp_events", [])
-    if clamp_events:
-        lines.append("clamp_events:\n")
-        for ce in clamp_events:
-            lines.append(
-                f"  - parameter: {ce['parameter']}\n"
-                f"    proposed: {ce['proposed']}\n"
-                f"    executed: {ce['executed']}\n"
-            )
-    else:
-        lines.append("clamp_events: []\n")
-    lines.append(f"parse_failure: {str(d.get('parse_failure', False)).lower()}\n")
-    lines.append(f"fallback_used: {str(d.get('fallback_used', False)).lower()}\n")
-    lines.append(f"truncated: {str(d.get('truncated', False)).lower()}\n\n")
-    return "".join(lines)
-
-
-def format_context_sections(bundle: ContextBundle) -> str:
-    """Format all optional context sections (task, metric, resources, diagnostics)."""
-    sections = []
-    if bundle.task_description:
-        sections.append(f"### Task Description\n{bundle.task_description}\n\n")
-    if bundle.metric_description:
-        sections.append(f"### Evaluation Metric\n{bundle.metric_description}\n\n")
-    sections.append(format_resources_section(bundle))
-    sections.append(format_diagnostics_section(bundle))
-    return "".join(sections)
 
 
 def _validate_dict_keys_no_trace_fields(data: Any, path: str = "root") -> None:
@@ -339,7 +290,35 @@ class BaseBenchmark(ABC):
             "No explanations, no markdown, no text outside the JSON object."
         )
 
+    @property
     @abstractmethod
+    def param_bounds(self) -> Dict[str, Tuple[float, float]]:
+        """Return parameter bounds dict for this benchmark."""
+        ...
+
+    @abstractmethod
+    def _get_task_intro(self) -> str:
+        """Return task-specific introduction text."""
+        ...
+
+    def _filter_config_for_prompt(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter config for prompt display. Default includes all param_bounds keys."""
+        return {k: config.get(k) for k in self.param_bounds.keys()}
+
+    def _format_history_entry(self, entry: Dict[str, Any]) -> str:
+        """Format a single history entry. Default iterates param_bounds keys."""
+        param_strs = [
+            f"{k}={v}"
+            for k, v in entry['config'].items()
+            if k in self.param_bounds
+        ]
+        return f"- step {entry['step']}: score={entry['score']:.4f}, " + ", ".join(param_strs)
+
+    @abstractmethod
+    def _get_output_format_instructions(self) -> str:
+        """Return output format instructions text (e.g., 'Values must be numeric.')."""
+        ...
+
     def _build_llm_user_prompt(
         self,
         bundle: ContextBundle,
@@ -347,13 +326,35 @@ class BaseBenchmark(ABC):
         """
         CONTEXT ONLY: Build the user prompt for direct LLM calls.
 
+        Common implementation that preserves exact formatting across benchmarks.
+        Subclasses customize via abstract methods: _get_task_intro(), param_bounds,
+        _format_history_entry(), _get_output_format_instructions().
+
         Args:
             bundle: Validated ContextBundle containing only agent-visible data
 
         Returns:
             Formatted prompt string for the LLM
         """
-        ...
+        filtered_config = self._filter_config_for_prompt(bundle.current_config)
+
+        prompt = f"### Task\n{self._get_task_intro()}\n\n"
+        prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
+        prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
+
+        if bundle.recent_history:
+            history_lines = "\n".join(
+                self._format_history_entry(e) for e in bundle.recent_history
+            )
+            prompt += f"### History\n{history_lines}\n\n"
+
+        prompt += format_context_sections(bundle)
+        prompt += (
+            "### Output Format\n"
+            f"Return JSON with exactly these keys: {list(self.param_bounds.keys())}.\n"
+            f"{self._get_output_format_instructions()}"
+        )
+        return prompt
 
     @property
     def workspace_path(self) -> Path:
@@ -552,31 +553,29 @@ class BaseBenchmark(ABC):
 
     def _compute_run_summary(self, run_id: str) -> RunSummary:
         """Compute aggregated run summary for analysis."""
-        # Performance: extract primary score from each step
-        scores = [self._get_primary_score(r.metrics) for r in self.history]
-        final_score = scores[-1]
-        best_score = max(scores) if self._is_higher_better() else min(scores)
+        scores = []
+        total_input = total_output = 0
+        total_latency = 0.0
+        num_clamp_events = num_parse_failures = num_fallbacks = num_truncations = 0
 
-        # Efficiency: from _compute_run_totals()
-        run_totals = self._compute_run_totals()
+        for r in self.history:
+            scores.append(self._get_primary_score(r.metrics))
+            if r.token_usage and isinstance(r.token_usage, dict):
+                total_input += r.token_usage.get("input_tokens", 0)
+                total_output += r.token_usage.get("output_tokens", 0)
+                total_latency += r.token_usage.get("latency_sec", 0.0)
+            if r.diagnostics:
+                num_clamp_events += len(r.diagnostics.get("clamp_events", []))
+                num_parse_failures += int(r.diagnostics.get("parse_failure", False))
+                num_fallbacks += int(r.diagnostics.get("fallback_used", False))
+                num_truncations += int(r.diagnostics.get("truncated", False))
 
-        # Diagnostics: aggregate counts from all steps
-        num_clamp_events = sum(
-            len(r.diagnostics.get("clamp_events", []))
-            for r in self.history if r.diagnostics
-        )
-        num_parse_failures = sum(
-            1 for r in self.history
-            if r.diagnostics and r.diagnostics.get("parse_failure", False)
-        )
-        num_fallbacks = sum(
-            1 for r in self.history
-            if r.diagnostics and r.diagnostics.get("fallback_used", False)
-        )
-        num_truncations = sum(
-            1 for r in self.history
-            if r.diagnostics and r.diagnostics.get("truncated", False)
-        )
+        final_score = scores[-1] if scores else 0.0
+        best_score = (max(scores) if self._is_higher_better() else min(scores)) if scores else 0.0
+        total_tokens = total_input + total_output
+
+        pricing = MODEL_PRICING.get(self.config.model, MODEL_PRICING[DEFAULT_MODEL])
+        total_cost = (total_input * pricing["input"] + total_output * pricing["output"]) / 1_000_000
 
         # Compute axis signature for easy filtering
         axis_signature = (
@@ -605,8 +604,8 @@ class BaseBenchmark(ABC):
             final_score=final_score,
             best_score=best_score,
             num_steps=self.config.num_steps,
-            total_tokens=run_totals["total_tokens"],
-            total_cost=run_totals["total_api_cost"],
+            total_tokens=total_tokens,
+            total_cost=round(total_cost, 6),
             num_clamp_events=num_clamp_events,
             num_parse_failures=num_parse_failures,
             num_fallbacks=num_fallbacks,
@@ -614,13 +613,15 @@ class BaseBenchmark(ABC):
         )
 
     def _write_run_summary(self, summary: RunSummary) -> None:
-        """Append run summary to JSONL file."""
+        """Append run summary to JSONL file with fsync for data integrity."""
         runs_dir = RUNS_ROOT / self.config.experiment_id
         runs_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = runs_dir / f"{self.benchmark_name}_runs.jsonl"
         with open(output_path, "a") as f:
             f.write(json.dumps(summary.to_dict()) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
 
     def run(self, run_id: Optional[str] = None) -> Dict[str, Any]:
         """
