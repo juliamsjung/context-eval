@@ -75,7 +75,7 @@ class NomadBenchmark(BaseBenchmark):
                 )
             ),
             "l2_regularization": _clamp(
-                current_config.get("l2_regularization", 0.0) * (1.3 if step % 2 == 0 else 0.7),
+                current_config.get("l2_regularization", 0.1) * (1.3 if step % 2 == 0 else 0.7),
                 PARAM_BOUNDS["l2_regularization"],
             ),
             "max_leaf_nodes": int(
