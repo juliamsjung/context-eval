@@ -166,6 +166,7 @@ These flags control what information the LLM agent sees:
 |------|---------|-------------|
 | `--verbose` | off | Enable step-by-step logging |
 | `--debug-show-llm` | off | Print full LLM request and response for debugging |
+| `--debug-show-diff` | off | Show config changes at each step with score delta |
 
 ## Running Benchmarks
 

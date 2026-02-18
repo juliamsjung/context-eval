@@ -44,6 +44,7 @@ def parse_benchmark_args(
 
     # Developer tools
     parser.add_argument("--debug-show-llm", action="store_true", help="Print full LLM request and response for debugging.")
+    parser.add_argument("--debug-show-diff", action="store_true", help="Show config changes at each step.")
     parser.add_argument("--verbose", action="store_true", help="Enable step-by-step logging.")
 
     args = parser.parse_args()
