@@ -183,6 +183,7 @@ class BenchmarkConfig:
     temperature: float = 0
     experiment_id: str = "default"
     debug_show_llm: bool = False
+    debug_show_diff: bool = False
     verbose: bool = False
 
     @classmethod
@@ -200,6 +201,7 @@ class BenchmarkConfig:
             temperature=args.temperature,
             experiment_id=args.experiment_id,
             debug_show_llm=args.debug_show_llm,
+            debug_show_diff=args.debug_show_diff,
             verbose=args.verbose,
         )
 
@@ -511,6 +513,29 @@ class BaseBenchmark(ABC):
         sanitized, clamp_events = self.sanitize_config(parsed)
         return sanitized or None, usage, False, clamp_events
 
+    def _print_config_diff(
+        self, step: int, prev_config: Dict, current_config: Dict, diagnostics: Dict
+    ) -> None:
+        """Print config diff for debugging (pure terminal output)."""
+        all_keys = set(prev_config.keys()) | set(current_config.keys())
+        changed = []
+
+        for key in sorted(all_keys):
+            old = prev_config.get(key)
+            new = current_config.get(key)
+            if old != new:
+                changed.append((key, old, new))
+
+        if changed:
+            print(f"\n[DEBUG] Config diff (Step {step}):")
+            for key, old, new in changed:
+                clamped = any(
+                    ce["parameter"] == key
+                    for ce in diagnostics.get("clamp_events", [])
+                )
+                suffix = " (clamped)" if clamped else ""
+                print(f"  {key}: {old} → {new}{suffix}")
+
     def setup_logger(self, run_id: Optional[str] = None) -> RunLogger:
         """Initialize the run logger."""
         self.logger = start_run(
@@ -689,6 +714,9 @@ class BaseBenchmark(ABC):
                 source = "heuristic"
                 fallback_used = True
 
+            # Capture previous state before mutation
+            prev_config = current_config.copy()
+
             current_config.update(proposal)
 
             # Compute diagnostics (execution layer)
@@ -702,6 +730,9 @@ class BaseBenchmark(ABC):
                 "fallback_used": fallback_used,
                 "truncated": truncated,
             }
+
+            if self.config.debug_show_diff:
+                self._print_config_diff(step, prev_config, current_config, diagnostics)
 
             if self.config.verbose:
                 print(f"{source.upper()} proposal: {proposal}")
