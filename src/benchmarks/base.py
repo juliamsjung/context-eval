@@ -514,7 +514,13 @@ class BaseBenchmark(ABC):
         return sanitized or None, usage, False, clamp_events
 
     def _print_config_diff(
-        self, step: int, prev_config: Dict, current_config: Dict, diagnostics: Dict
+        self,
+        step: int,
+        prev_config: Dict,
+        current_config: Dict,
+        diagnostics: Dict,
+        prev_score: float,
+        new_score: float,
     ) -> None:
         """Print config diff for debugging (pure terminal output)."""
         all_keys = set(prev_config.keys()) | set(current_config.keys())
@@ -526,15 +532,22 @@ class BaseBenchmark(ABC):
             if old != new:
                 changed.append((key, old, new))
 
-        if changed:
-            print(f"\n[DEBUG] Config diff (Step {step}):")
-            for key, old, new in changed:
-                clamped = any(
-                    ce["parameter"] == key
-                    for ce in diagnostics.get("clamp_events", [])
-                )
-                suffix = " (clamped)" if clamped else ""
-                print(f"  {key}: {old} → {new}{suffix}")
+        if not changed:
+            return
+
+        # Compute delta (+ means improvement)
+        delta = new_score - prev_score
+        if not self._is_higher_better():
+            delta = -delta
+
+        print(f"\n[DEBUG] Step {step} | score: {new_score:.4f} (Δ {delta:+.4f}):")
+        for key, old, new in changed:
+            clamped = any(
+                ce["parameter"] == key
+                for ce in diagnostics.get("clamp_events", [])
+            )
+            suffix = " (clamped)" if clamped else ""
+            print(f"  {key}: {old} → {new}{suffix}")
 
     def setup_logger(self, run_id: Optional[str] = None) -> RunLogger:
         """Initialize the run logger."""
@@ -731,9 +744,6 @@ class BaseBenchmark(ABC):
                 "truncated": truncated,
             }
 
-            if self.config.debug_show_diff:
-                self._print_config_diff(step, prev_config, current_config, diagnostics)
-
             if self.config.verbose:
                 print(f"{source.upper()} proposal: {proposal}")
 
@@ -746,6 +756,14 @@ class BaseBenchmark(ABC):
 
             # Run training
             metrics = self.run_training(current_config)
+
+            # Debug diff (after training so we have the score)
+            if self.config.debug_show_diff:
+                prev_score = self._get_primary_score(self.history[-1].metrics)
+                new_score = self._get_primary_score(metrics)
+                self._print_config_diff(
+                    step, prev_config, current_config, diagnostics, prev_score, new_score
+                )
 
             # Record result
             result = IterationResult(
