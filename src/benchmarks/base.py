@@ -339,13 +339,13 @@ class BaseBenchmark(ABC):
 
         prompt = f"### Task\n{self._get_task_intro()}\n\n"
         prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
-        prompt += f"### Feedback\nscore: {bundle.latest_score:.4f}\n\n"
+        prompt += f"### Current Score\nscore: {bundle.latest_score:.4f}\n\n"
 
         if bundle.recent_history:
             history_lines = "\n".join(
                 self._format_history_entry(e) for e in bundle.recent_history
             )
-            prompt += f"### History\n{history_lines}\n\n"
+            prompt += f"### Previous Steps\n{history_lines}\n\n"
 
         prompt += format_context_sections(bundle)
         prompt += (

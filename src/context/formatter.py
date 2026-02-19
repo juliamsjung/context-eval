@@ -23,8 +23,8 @@ def format_context_sections(bundle: ContextBundle) -> str:
     """Format all optional context sections (task, metric, bounds)."""
     sections = []
     if bundle.task_description:
-        sections.append(f"### Task Description\n{bundle.task_description}\n\n")
+        sections.append(f"### Description\n{bundle.task_description}\n\n")
     if bundle.metric_description:
-        sections.append(f"### Evaluation Metric\n{bundle.metric_description}\n\n")
+        sections.append(f"### Evaluation\n{bundle.metric_description}\n\n")
     sections.append(format_bounds_section(bundle))
     return "".join(sections)
