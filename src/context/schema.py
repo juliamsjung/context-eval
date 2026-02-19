@@ -6,7 +6,7 @@ These structures are validated to ensure no trace-only data leaks into them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ContextLeakageError(Exception):
@@ -37,16 +37,14 @@ class ContextBundle:
         recent_history: Windowed history of past iterations (step, config, score only)
         task_description: Optional task context (gated by --show-task)
         metric_description: Optional metric context (gated by --show-metric)
-        resource_summary: Optional resource usage (gated by --show-resources)
-        diagnostics: Optional execution diagnostics (gated by --show-diagnostics)
+        bounds: Optional parameter bounds (gated by --show-bounds)
     """
     current_config: Dict[str, Any]
     latest_score: float
     recent_history: List[Dict[str, Any]] = field(default_factory=list)
     task_description: Optional[str] = None
     metric_description: Optional[str] = None
-    resource_summary: Optional[Dict[str, Any]] = None
-    diagnostics: Optional[Dict[str, Any]] = None
+    bounds: Optional[Dict[str, Tuple[float, float]]] = None
 
     def __post_init__(self) -> None:
         """Validate no trace-only fields leaked into the bundle."""
@@ -92,8 +90,6 @@ class ContextBundle:
             result["task_description"] = self.task_description
         if self.metric_description is not None:
             result["metric_description"] = self.metric_description
-        if self.resource_summary is not None:
-            result["resource_summary"] = self.resource_summary
-        if self.diagnostics is not None:
-            result["diagnostics"] = self.diagnostics
+        if self.bounds is not None:
+            result["bounds"] = self.bounds
         return result

@@ -21,12 +21,11 @@ class TestRunSummary:
             git_commit="abc1234",
             model_name="gpt-4o-mini",
             temperature=0.0,
-            axis_signature="fd1_t0_m0_r0_d0",
+            axis_signature="fd1_t0_m0_b0",
             feedback_depth=1,
             show_task=False,
             show_metric=False,
-            show_resources=False,
-            show_diagnostics=False,
+            show_bounds=False,
             final_score=0.85,
             best_score=0.87,
             num_steps=5,
@@ -41,7 +40,7 @@ class TestRunSummary:
 
         assert d["benchmark"] == "toy"
         assert d["seed"] == 0
-        assert d["axis_signature"] == "fd1_t0_m0_r0_d0"
+        assert d["axis_signature"] == "fd1_t0_m0_b0"
         assert d["final_score"] == 0.85
         assert d["best_score"] == 0.87
         assert d["num_steps"] == 5
@@ -59,12 +58,11 @@ class TestRunSummary:
             git_commit=None,
             model_name="gpt-4o",
             temperature=0.7,
-            axis_signature="fd5_t1_m1_r1_d1",
+            axis_signature="fd5_t1_m1_b1",
             feedback_depth=5,
             show_task=True,
             show_metric=True,
-            show_resources=True,
-            show_diagnostics=True,
+            show_bounds=True,
             final_score=0.123,
             best_score=0.100,
             num_steps=10,
@@ -141,8 +139,8 @@ class TestRunSummaryAggregation:
 class TestRunSummaryIndependence:
     """Tests verifying logging is independent of visibility flags."""
 
-    def test_totals_same_regardless_of_show_resources(self):
-        """Token totals must be identical whether show_resources is True or False."""
+    def test_totals_same_regardless_of_show_bounds(self):
+        """Token totals must be identical whether show_bounds is True or False."""
         from src.benchmarks.base import IterationResult
 
         # Same history data
@@ -185,9 +183,9 @@ class TestRunSummaryFileOutput:
                 experiment_id="default",
                 timestamp="2026-01-15T12:00:00Z", git_commit="abc1234",
                 model_name="gpt-4o-mini", temperature=0.0,
-                axis_signature="fd1_t0_m0_r0_d0",
+                axis_signature="fd1_t0_m0_b0",
                 feedback_depth=1, show_task=False, show_metric=False,
-                show_resources=False, show_diagnostics=False,
+                show_bounds=False,
                 final_score=0.8, best_score=0.85, num_steps=3,
                 total_tokens=100, total_cost=0.001,
                 num_clamp_events=0, num_parse_failures=0,
@@ -215,9 +213,9 @@ class TestRunSummaryFileOutput:
                     experiment_id="default",
                     timestamp="2026-01-15T12:00:00Z", git_commit="abc1234",
                     model_name="gpt-4o-mini", temperature=0.0,
-                    axis_signature="fd1_t0_m0_r0_d0",
+                    axis_signature="fd1_t0_m0_b0",
                     feedback_depth=1, show_task=False, show_metric=False,
-                    show_resources=False, show_diagnostics=False,
+                    show_bounds=False,
                     final_score=0.8 + seed * 0.01, best_score=0.85,
                     num_steps=3,
                     total_tokens=100, total_cost=0.001,
