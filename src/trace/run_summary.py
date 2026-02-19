@@ -21,12 +21,11 @@ class RunSummary:
     temperature: float
 
     # Axes (experimental conditions)
-    axis_signature: str  # e.g., "fd5_t1_m1_r1_d1"
+    axis_signature: str  # e.g., "fd5_t1_m1_b1"
     feedback_depth: int
     show_task: bool
     show_metric: bool
-    show_resources: bool
-    show_diagnostics: bool
+    show_bounds: bool
 
     # Performance
     final_score: float

@@ -7,7 +7,7 @@ by explicitly extracting only the data that should be visible to agents.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 
 
 from src.context.axes import ContextAxes
@@ -46,6 +46,7 @@ class ContextBuilder:
         axes: ContextAxes,
         score_extractor: Callable[[Dict[str, float]], float],
         workspace_path: Optional[Path] = None,
+        param_bounds: Optional[Dict[str, Tuple[float, float]]] = None,
     ) -> None:
         """
         Initialize the context builder.
@@ -54,10 +55,12 @@ class ContextBuilder:
             axes: Visibility axes configuration
             score_extractor: Function that extracts primary score from metrics
             workspace_path: Optional workspace path for loading artifacts
+            param_bounds: Optional parameter bounds for show_bounds axis
         """
         self.axes = axes
         self.score_extractor = score_extractor
         self.workspace_path = workspace_path
+        self._param_bounds = param_bounds
 
     def _load_artifact(self, filename: str) -> Optional[str]:
         """Load text artifact from workspace if it exists."""
@@ -80,77 +83,11 @@ class ContextBuilder:
             return None
         return self._load_artifact("metric_description.txt")
 
-    def _compute_resource_summary(
-        self, history: List[IterationResultProtocol]
-    ) -> Optional[Dict[str, Any]]:
-        """
-        CONTEXT ONLY: Aggregate resource usage from history.
-
-        IMPORTANT: This method only SUMS existing values computed by the trace layer.
-        It NEVER computes costs from pricing formulas - that's the trace layer's job.
-
-        Args:
-            history: Full iteration history with token_usage data
-
-        Returns:
-            Resource summary dict if show_resources is enabled, None otherwise
-        """
-        if not self.axes.show_resources:
+    def _get_bounds(self) -> Optional[Dict[str, Tuple[float, float]]]:
+        """Return parameter bounds if show_bounds is enabled."""
+        if not self.axes.show_bounds:
             return None
-
-        total_tokens = 0
-        total_cost = 0.0
-        last_tokens = 0
-
-        for entry in history:
-            if hasattr(entry, 'token_usage') and entry.token_usage and isinstance(entry.token_usage, dict):
-                tokens = entry.token_usage.get("total_tokens", 0)
-                total_tokens += tokens
-                total_cost += entry.token_usage.get("api_cost", 0.0)  # Sum pre-computed cost
-                last_tokens = tokens  # Only update when we have valid token usage
-
-        return {
-            "tokens_current": last_tokens,
-            "tokens_cumulative": total_tokens,
-            "cost_cumulative": round(total_cost, 6),
-        }
-
-    def _get_diagnostics(
-        self, history: List[IterationResultProtocol]
-    ) -> Optional[Dict[str, Any]]:
-        """
-        CONTEXT ONLY: Project diagnostics from most recent step.
-
-        This method only READS pre-computed diagnostics from IterationResult.
-        It NEVER computes truncation, parse_failure, etc. — that's the execution layer's job.
-
-        Args:
-            history: Full iteration history with diagnostics data
-
-        Returns:
-            Diagnostics dict if show_diagnostics is enabled, None otherwise.
-            Returns default empty diagnostics if enabled but no diagnostics exist
-            (e.g., after baseline step 0) to maintain consistent prompt structure.
-        """
-        if not self.axes.show_diagnostics:
-            return None
-
-        # Default diagnostics for consistent prompt structure
-        default_diagnostics = {
-            "clamp_events": [],
-            "parse_failure": False,
-            "fallback_used": False,
-            "truncated": False,
-        }
-
-        if not history:
-            return default_diagnostics
-
-        last = history[-1]
-        if not hasattr(last, 'diagnostics') or not last.diagnostics:
-            return default_diagnostics
-
-        return last.diagnostics
+        return self._param_bounds
 
     def build(
         self,
@@ -198,11 +135,8 @@ class ContextBuilder:
         task_desc = self._get_task_description()
         metric_desc = self._get_metric_description()
 
-        # Compute resource summary if enabled (sums pre-computed costs, no pricing formulas)
-        resource_summary = self._compute_resource_summary(history)
-
-        # Get diagnostics if enabled (projects pre-computed diagnostics from last step)
-        diagnostics = self._get_diagnostics(history)
+        # Get bounds if enabled
+        bounds = self._get_bounds()
 
         # Construct and validate bundle (validation happens in __post_init__)
         return ContextBundle(
@@ -211,6 +145,5 @@ class ContextBuilder:
             recent_history=recent_history,
             task_description=task_desc,
             metric_description=metric_desc,
-            resource_summary=resource_summary,
-            diagnostics=diagnostics,
+            bounds=bounds,
         )

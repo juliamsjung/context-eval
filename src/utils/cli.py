@@ -37,8 +37,7 @@ def parse_benchmark_args(
     # Context visibility flags
     parser.add_argument("--show-task", action="store_true", help="Include task description in prompt.")
     parser.add_argument("--show-metric", action="store_true", help="Include metric description in prompt.")
-    parser.add_argument("--show-resources", action="store_true", help="Include resource usage (tokens, cost, latency) in prompt.")
-    parser.add_argument("--show-diagnostics", action="store_true", help="Include execution diagnostics in prompt.")
+    parser.add_argument("--show-bounds", action="store_true", help="Include parameter bounds (valid ranges) in prompt.")
     parser.add_argument("--feedback-depth", type=int, default=1,
                         help="Feedback depth: number of visible outcome signals (1=current only, 5=current+4 history).")
 

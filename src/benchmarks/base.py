@@ -177,8 +177,7 @@ class BenchmarkConfig:
     seed: int = 0
     show_task: bool = False
     show_metric: bool = False
-    show_resources: bool = False
-    show_diagnostics: bool = False
+    show_bounds: bool = False
     model: str = "gpt-4o-mini"
     temperature: float = 0
     experiment_id: str = "default"
@@ -195,8 +194,7 @@ class BenchmarkConfig:
             seed=args.seed,
             show_task=args.show_task,
             show_metric=args.show_metric,
-            show_resources=args.show_resources,
-            show_diagnostics=args.show_diagnostics,
+            show_bounds=args.show_bounds,
             model=args.model,
             temperature=args.temperature,
             experiment_id=args.experiment_id,
@@ -235,8 +233,7 @@ class BaseBenchmark(ABC):
             feedback_depth=config.feedback_depth,
             show_task=config.show_task,
             show_metric=config.show_metric,
-            show_resources=config.show_resources,
-            show_diagnostics=config.show_diagnostics,
+            show_bounds=config.show_bounds,
         )
         # Note: _context_builder is initialized lazily after workspace_path is available
         self._context_builder: Optional[ContextBuilder] = None
@@ -379,6 +376,7 @@ class BaseBenchmark(ABC):
                 axes=self._context_axes,
                 score_extractor=self._get_primary_score,
                 workspace_path=workspace,
+                param_bounds=self.param_bounds,
             )
         return self._context_builder
 
@@ -620,8 +618,7 @@ class BaseBenchmark(ABC):
             f"fd{self.config.feedback_depth}"
             f"_t{int(self.config.show_task)}"
             f"_m{int(self.config.show_metric)}"
-            f"_r{int(self.config.show_resources)}"
-            f"_d{int(self.config.show_diagnostics)}"
+            f"_b{int(self.config.show_bounds)}"
         )
 
         return RunSummary(
@@ -637,8 +634,7 @@ class BaseBenchmark(ABC):
             feedback_depth=self.config.feedback_depth,
             show_task=self.config.show_task,
             show_metric=self.config.show_metric,
-            show_resources=self.config.show_resources,
-            show_diagnostics=self.config.show_diagnostics,
+            show_bounds=self.config.show_bounds,
             final_score=final_score,
             best_score=best_score,
             num_steps=self.config.num_steps,
@@ -685,8 +681,7 @@ class BaseBenchmark(ABC):
                 "feedback_depth": self.config.feedback_depth,
                 "show_task": self.config.show_task,
                 "show_metric": self.config.show_metric,
-                "show_resources": self.config.show_resources,
-                "show_diagnostics": self.config.show_diagnostics,
+                "show_bounds": self.config.show_bounds,
                 "model": self.config.model,
                 "temperature": self.config.temperature,
             },

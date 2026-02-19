@@ -21,14 +21,12 @@ class ContextAxes:
         feedback_depth: Number of visible outcome signals (1=current only, 5=current+4 history)
         show_task: Whether to include task_description.txt content
         show_metric: Whether to include metric_description.txt content
-        show_resources: Whether to include resource usage (tokens, cost, latency)
-        show_diagnostics: Whether to include execution diagnostics (clamp events, parse failures, etc.)
+        show_bounds: Whether to include parameter bounds (valid ranges for each hyperparameter)
     """
     feedback_depth: int = 1
     show_task: bool = False
     show_metric: bool = False
-    show_resources: bool = False
-    show_diagnostics: bool = False
+    show_bounds: bool = False
 
     def __post_init__(self) -> None:
         """Validate axis values."""
