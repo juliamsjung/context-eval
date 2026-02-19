@@ -337,7 +337,7 @@ class BaseBenchmark(ABC):
         """
         filtered_config = self._filter_config_for_prompt(bundle.current_config)
 
-        prompt = f"### Task\n{self._get_task_intro()}\n\n"
+        prompt = f"### Instruction\n{self._get_task_intro()}\n\n"
         prompt += f"### Current Configuration\n{json.dumps(filtered_config, indent=2)}\n\n"
         prompt += f"### Current Score\nscore: {bundle.latest_score:.4f}\n\n"
 
