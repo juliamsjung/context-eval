@@ -4,8 +4,6 @@
 
 ContextEval is a benchmarking framework that isolates and studies the causal effects of context visibility on LLM agent behavior in iterative machine learning workflows, without modifying model architecture or prompt structure.
 
-![Architecture](figs/new_architecture.png)
-
 ## Quick Start
 
 ```bash
