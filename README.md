@@ -2,7 +2,83 @@
 
 ## Overview
 
-ContextEval is a benchmarking framework that isolates and studies the causal effects of context visibility on LLM agent behavior in iterative machine learning workflows, without modifying model architecture or prompt structure.
+ContextEval is a benchmarking framework that isolates and studies the causal effects of context visibility on LLM agent behavior in iterative machine learning workflows.
+
+ContextEval does not modify model architecture or prompt phrasing; it manipulates only structured informational access.
+
+ContextEval is not a prompt-engineering toolkit; it is a controlled experimental framework for studying informational exposure.
+
+## Problem Statement
+
+When LLM agents are deployed as autonomous optimizers in machine learning workflows (e.g., hyperparameter tuning), their behavior depends on the information made visible to them at each step.
+
+However, it remains unclear:
+
+> **Which categories of context are necessary and sufficient for stable and efficient iterative optimization?**
+
+ContextEval treats context visibility as an experimental variable. We isolate the causal effect of informational access while holding the following fixed:
+- Base LLM
+- Dataset and task
+- Optimization horizon (number of steps, fixed across all configurations)
+- Offline training environment
+
+We vary four context axes:
+
+| Axis | Description |
+|------|-------------|
+| `show_task` | Task description (problem framing) |
+| `show_metric` | Evaluation metric definition |
+| `show_bounds` | Explicit hyperparameter bounds (feasible region) |
+| `feedback_depth` | Number of prior optimization steps visible to the agent (1 = current only, 5 = current + 4 history) |
+
+By running a full factorial grid (2×2×2×2 = 16 configurations × 3 seeds = 48 runs), we estimate the marginal and interaction effects of each axis on:
+- Optimization outcome (best achieved metric)
+- Convergence efficiency
+- Behavioral stability (oscillation, variance)
+- Constraint violations (clamp events)
+
+Importantly, diagnostic signals and resource usage are always recorded in the trace layer but never shown to the agent, ensuring no trace-only signals are exposed to the agent.
+
+## Architecture Overview
+
+ContextEval enforces strict separation between execution, context projection, and trace logging to guarantee experimental isolation and prevent context leakage.
+
+- **Execution Layer**: Runs optimization steps and training.
+- **Context Layer**: Controls what information is exposed to the LLM.
+- **Trace Layer**: Logs full system state for analysis (never exposed to the LLM).
+
+```
+context-eval/
+├── src/
+│   ├── benchmarks/          # Execution layer (training + iteration logic)
+│   │   ├── base.py
+│   │   ├── nomad/
+│   │   ├── jigsaw/
+│   │   └── toy/
+│   ├── context/             # Context projection layer (LLM-visible data only)
+│   │   ├── axes.py
+│   │   ├── builder.py
+│   │   ├── formatter.py
+│   │   └── schema.py
+│   ├── trace/               # Trace layer (full observability, never exposed)
+│   │   ├── logger.py
+│   │   ├── run_summary.py
+│   │   └── schema.py
+│   └── utils/
+├── scripts/
+├── experiments/
+├── logs/
+│   ├── traces/
+│   └── runs/
+└── run_*_bench.py
+```
+
+## Design Principles
+
+- **Causal Isolation** — Only context visibility is varied.
+- **No Prompt Engineering** — Instruction phrasing is fixed across runs.
+- **No Context Leakage** — Trace-only signals are never shown to the LLM.
+- **Full Observability** — All execution state is recorded for analysis.
 
 ## Quick Start
 
@@ -37,6 +113,26 @@ source venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
+
+**Core Dependencies:**
+| Package | Purpose |
+|---------|---------|
+| `openai` | LLM API client |
+| `pandas`, `numpy` | Data manipulation |
+| `scikit-learn` | ML models and metrics |
+
+**Analysis & Visualization:**
+| Package | Purpose |
+|---------|---------|
+| `matplotlib`, `seaborn` | Plotting |
+| `jupyter` | Notebook environment |
+| `tqdm` | Progress bars |
+
+**Optional:**
+| Package | Purpose |
+|---------|---------|
+| `kaggle` | Dataset fetching (only needed once) |
+| `pytest` | Testing |
 
 ### 3. Configure API Keys
 
