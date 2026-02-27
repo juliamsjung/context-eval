@@ -1,0 +1,1 @@
+Submissions are evaluated on multi-class classification accuracy.
