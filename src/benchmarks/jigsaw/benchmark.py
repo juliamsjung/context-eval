@@ -16,7 +16,7 @@ PARAM_BOUNDS = {
     "ngram_max": (1, 3),
     "min_df": (1, 20),
     "C": (0.01, 10.0),
-    "max_iter": (50, 500),
+    "max_iter": (50, 1000),
 }
 
 
