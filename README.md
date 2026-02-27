@@ -163,7 +163,6 @@ We use Kaggle datasets as data sources. Benchmarks run **offline** using prepare
 
 3. **Join the competitions** (accept rules on each page):
    - [NOMAD 2018](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) - Click "Late Submission"
-   - [Leaf Classification](https://www.kaggle.com/c/leaf-classification) - Click "Late Submission"
    - [Jigsaw Toxic Comment](https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge) - Click "Late Submission"
 
 ---
@@ -186,27 +185,6 @@ python3 scripts/prepare_nomad.py --float32
 ```
 
 Prepared data saved to `src/benchmarks/nomad/workspace/`.
-
----
-
-### Leaf Dataset (Species Classification - Image Data (Tabular Data of the Image's Features))
-
-```bash
-# 1. Fetch from Kaggle
-python3 scripts/fetch_leaf.py
-
-# 2. Unzip the nested archives
-cd kaggle-data/leaf/raw
-unzip -o leaf-classification.zip
-unzip -o train.csv.zip
-unzip -o test.csv.zip
-cd ../../..
-
-# 3. Prepare offline artifacts
-python3 scripts/prepare_leaf.py --float32
-```
-
-Prepared data saved to `src/benchmarks/leaf/workspace/`.
 
 ---
 

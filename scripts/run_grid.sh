@@ -16,7 +16,7 @@ usage() {
     echo "Usage: $0 <benchmark> [--num-steps N] [--dry-run]"
     echo ""
     echo "Arguments:"
-    echo "  benchmark     One of: toy, nomad, jigsaw, leaf"
+    echo "  benchmark     One of: toy, nomad, jigsaw"
     echo ""
     echo "Options:"
     echo "  --num-steps N  Number of steps per run (default: 10)"
@@ -49,10 +49,10 @@ done
 
 # Validate benchmark
 case "$BENCHMARK" in
-    toy|nomad|jigsaw|leaf) ;;
+    toy|nomad|jigsaw) ;;
     *)
         echo "Unknown benchmark: $BENCHMARK"
-        echo "Available: toy, nomad, jigsaw, leaf"
+        echo "Available: toy, nomad, jigsaw"
         exit 1
         ;;
 esac
