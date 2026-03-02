@@ -1,4 +1,4 @@
-"""Jigsaw Toxic Comment Classification benchmark implementation."""
+"""Forest Cover Type Prediction benchmark implementation."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,36 +8,36 @@ from src.benchmarks.base import (
     BaseBenchmark, BenchmarkConfig, _clamp,
     sanitize_with_clamp_tracking,
 )
-from src.benchmarks.jigsaw.env import JigsawEnv
+from src.benchmarks.forest.env import ForestEnv
 
 
 PARAM_BOUNDS = {
-    "max_features": (1000, 50000),
-    "ngram_max": (1, 3),
-    "min_df": (1, 20),
-    "C": (0.01, 10.0),
-    "max_iter": (50, 1000),
+    "n_estimators": (50, 500),
+    "max_depth": (3, 30),
+    "min_samples_split": (2, 50),
+    "min_samples_leaf": (1, 30),
+    "max_features": (0.1, 1.0),
 }
 
 
-class JigsawBenchmark(BaseBenchmark):
-    """Jigsaw Toxic Comment multi-label text classification benchmark."""
+class ForestBenchmark(BaseBenchmark):
+    """Forest Cover Type multi-class classification benchmark."""
 
     def __init__(self, config: BenchmarkConfig):
         super().__init__(config)
-        self.env = JigsawEnv()
+        self.env = ForestEnv()
 
     @property
     def benchmark_name(self) -> str:
-        return "jigsaw"
+        return "forest"
 
     @property
     def dataset_id(self) -> str:
-        return "jigsaw"
+        return "forest"
 
     @property
     def agent_id(self) -> str:
-        return "jigsaw_llm"
+        return "forest_llm"
 
     @property
     def workspace_path(self) -> Path:
@@ -49,56 +49,57 @@ class JigsawBenchmark(BaseBenchmark):
     def run_training(self, config: Dict[str, Any]) -> Dict[str, float]:
         self.env.write_config(config)
         results = self.env.run_train()
+        metrics = results.get("metrics", {})
         return {
-            "mean_auc": results.get("metric_value", results.get("metrics", {}).get("mean_auc", 0.0)),
-            "num_labels_scored": results.get("metrics", {}).get("num_labels_scored", 0),
+            "accuracy": metrics.get("accuracy", 0.0),
+            "f1_weighted": metrics.get("f1_weighted", 0.0),
         }
 
     def fallback_config(self, current_config: Dict[str, Any], step: int) -> Dict[str, Any]:
         factor = 1.15 if step % 2 == 0 else 0.85
         return {
-            "max_features": int(
+            "n_estimators": int(
                 _clamp(
-                    current_config.get("max_features", 10000) * factor,
-                    PARAM_BOUNDS["max_features"],
+                    current_config.get("n_estimators", 100) * factor,
+                    PARAM_BOUNDS["n_estimators"],
                 )
             ),
-            "ngram_max": int(
+            "max_depth": int(
                 _clamp(
-                    current_config.get("ngram_max", 2) + (1 if step % 3 == 0 else 0),
-                    PARAM_BOUNDS["ngram_max"],
+                    current_config.get("max_depth", 10) + (2 if step % 2 == 0 else -2),
+                    PARAM_BOUNDS["max_depth"],
                 )
             ),
-            "min_df": int(
+            "min_samples_split": int(
                 _clamp(
-                    current_config.get("min_df", 5) + (1 if step % 2 == 0 else -1),
-                    PARAM_BOUNDS["min_df"],
+                    current_config.get("min_samples_split", 5) + (2 if step % 2 == 0 else -1),
+                    PARAM_BOUNDS["min_samples_split"],
                 )
             ),
-            "C": _clamp(
-                current_config.get("C", 1.0) * factor,
-                PARAM_BOUNDS["C"],
-            ),
-            "max_iter": int(
+            "min_samples_leaf": int(
                 _clamp(
-                    current_config.get("max_iter", 100) + (25 if step % 2 == 0 else -15),
-                    PARAM_BOUNDS["max_iter"],
+                    current_config.get("min_samples_leaf", 2) + (1 if step % 2 == 0 else -1),
+                    PARAM_BOUNDS["min_samples_leaf"],
                 )
+            ),
+            "max_features": _clamp(
+                current_config.get("max_features", 0.5) * (1.1 if step % 2 == 0 else 0.9),
+                PARAM_BOUNDS["max_features"],
             ),
         }
 
     def sanitize_config(self, proposal: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         return sanitize_with_clamp_tracking(
             proposal, PARAM_BOUNDS,
-            integer_keys={"max_features", "ngram_max", "min_df", "max_iter"},
+            integer_keys={"n_estimators", "max_depth", "min_samples_split", "min_samples_leaf"},
         )
 
     def _get_primary_score(self, metrics: Dict[str, float]) -> float:
-        """Extract primary score for agent feedback (higher is better for AUC)."""
-        return metrics.get("mean_auc", 0.0)
+        """Extract primary score for agent feedback (higher is better for accuracy)."""
+        return metrics.get("accuracy", 0.0)
 
     def _is_higher_better(self) -> bool:
-        """Mean AUC: higher is better."""
+        """Accuracy: higher is better."""
         return True
 
     @property
@@ -112,15 +113,15 @@ class JigsawBenchmark(BaseBenchmark):
 
     def _get_task_intro(self) -> str:
         """Return task-specific introduction text."""
-        return "You are tuning a TF-IDF + Logistic Regression pipeline for multi-label toxicity classification."
+        return "You are tuning a RandomForestClassifier for multi-class forest cover type prediction."
 
     def _get_output_format_instructions(self) -> str:
         """Return output format instructions."""
         return "Values must be numeric and within reasonable ranges."
 
 
-def run_jigsaw_bench(args, run_id: Optional[str] = None) -> Dict[str, Any]:
-    """Run Jigsaw benchmark."""
+def run_forest_bench(args, run_id: Optional[str] = None) -> Dict[str, Any]:
+    """Run Forest Cover Type benchmark."""
     config = BenchmarkConfig.from_args(args)
-    benchmark = JigsawBenchmark(config)
+    benchmark = ForestBenchmark(config)
     return benchmark.run(run_id=run_id or args.run_id)

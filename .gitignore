@@ -78,6 +78,18 @@ src/benchmarks/jigsaw/workspace/prepared_meta.json
 src/benchmarks/jigsaw/workspace/label_mapping.json
 src/benchmarks/jigsaw/workspace/results.json
 
+# Kaggle Forest Cover data (downloaded locally)
+kaggle-data/forest/raw/
+kaggle-data/forest/processed/
+
+# Forest bench artifacts
+src/benchmarks/forest/workspace/run_config.json
+src/benchmarks/forest/workspace/features.npy
+src/benchmarks/forest/workspace/labels.npy
+src/benchmarks/forest/workspace/dataset_context.json
+src/benchmarks/forest/workspace/prepared_meta.json
+src/benchmarks/forest/workspace/results.json
+
 # New directories for experiment outputs
 outputs/
 data/
