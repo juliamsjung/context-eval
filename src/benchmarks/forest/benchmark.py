@@ -98,6 +98,10 @@ class ForestBenchmark(BaseBenchmark):
         """Extract primary score for agent feedback (higher is better for accuracy)."""
         return metrics.get("accuracy", 0.0)
 
+    def _is_higher_better(self) -> bool:
+        """Accuracy: higher is better."""
+        return True
+
     @property
     def param_bounds(self) -> Dict[str, Tuple[float, float]]:
         """Return parameter bounds for this benchmark."""

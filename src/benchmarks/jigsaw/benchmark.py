@@ -97,6 +97,10 @@ class JigsawBenchmark(BaseBenchmark):
         """Extract primary score for agent feedback (higher is better for AUC)."""
         return metrics.get("mean_auc", 0.0)
 
+    def _is_higher_better(self) -> bool:
+        """Mean AUC: higher is better."""
+        return True
+
     @property
     def param_bounds(self) -> Dict[str, Tuple[float, float]]:
         """Return parameter bounds for this benchmark."""
