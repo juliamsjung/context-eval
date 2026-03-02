@@ -12,8 +12,8 @@ from src.benchmarks.forest.env import ForestEnv
 
 
 PARAM_BOUNDS = {
-    "n_estimators": (50, 500),
-    "max_depth": (3, 30),
+    "n_estimators": (50, 1000),
+    "max_depth": (3, 100),
     "min_samples_split": (2, 50),
     "min_samples_leaf": (1, 30),
     "max_features": (0.1, 1.0),
