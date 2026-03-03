@@ -2,8 +2,12 @@
 # =============================================================================
 # Unified Benchmark Experiment Grid
 # =============================================================================
-# Runs benchmark experiments with varying context policies.
+# Runs benchmark experiments with varying context policies and init qualities.
 # Tests how different context axes affect agent optimization performance.
+#
+# Prerequisites:
+#   Run landscape characterization first to generate init configs:
+#     python scripts/run_landscape.py --benchmark <benchmark> --num-samples 200
 # =============================================================================
 
 set -euo pipefail
@@ -22,10 +26,13 @@ usage() {
     echo "  --num-steps N  Number of steps per run (default: 10)"
     echo "  --dry-run      Print commands without executing"
     echo ""
+    echo "Prerequisites:"
+    echo "  python scripts/run_landscape.py --benchmark <benchmark>"
+    echo ""
     echo "Examples:"
-    echo "  $0 toy                    # Run toy benchmark with 10 steps"
-    echo "  $0 nomad --num-steps 20   # Run nomad with 20 steps"
-    echo "  $0 toy --dry-run          # Print commands without running"
+    echo "  $0 nomad                   # Run nomad with 10 steps"
+    echo "  $0 nomad --num-steps 20    # Run nomad with 20 steps"
+    echo "  $0 nomad --dry-run         # Print commands without running"
     exit 1
 }
 
@@ -57,24 +64,55 @@ case "$BENCHMARK" in
         ;;
 esac
 
+# Validate that landscape init configs exist
+INIT_CONFIG_DIR="logs/landscape/${BENCHMARK}_init_configs"
+if [[ ! -d "$INIT_CONFIG_DIR" ]]; then
+    echo "ERROR: Init configs not found at $INIT_CONFIG_DIR"
+    echo "Run landscape characterization first:"
+    echo "  python scripts/run_landscape.py --benchmark $BENCHMARK --num-samples 200"
+    exit 1
+fi
+
+for quality in low neutral high; do
+    if [[ ! -f "$INIT_CONFIG_DIR/$quality.json" ]]; then
+        echo "ERROR: Missing init config: $INIT_CONFIG_DIR/$quality.json"
+        exit 1
+    fi
+done
+
 # Derived variables
 PYTHON="${PYTHON:-python}"
 PYTHON_SCRIPT="run_${BENCHMARK}_bench.py"
 TIMESTAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 EXPERIMENT_ID="grid_${TIMESTAMP}"
-TOTAL=48  # 2 × 2 × 2 × 2 × 3 = 48 runs
+TOTAL=48  # 3 × 2 × 2 × 2 × 2 = 48 runs
 FAILED_CONFIGS=()
 
+# Save original config.json for restoration
+CONFIG_PATH="src/benchmarks/${BENCHMARK}/workspace/config.json"
+ORIGINAL_CONFIG=$(cat "$CONFIG_PATH")
+
+# Cleanup: restore original config.json on exit (normal or error)
+cleanup() {
+    echo "$ORIGINAL_CONFIG" > "$CONFIG_PATH"
+}
+trap cleanup EXIT
+trap 'echo -e "\nInterrupted. Exiting..."; exit 130' INT
+
 count=0
-for feedback_depth in 1 5; do
-    for show_task in 0 1; do
-        for show_metric in 0 1; do
-            for show_bounds in 0 1; do
-                for seed in 0 1 2; do
+for init_quality in low neutral high; do
+    # Swap workspace config.json with the stratified init config
+    cp "$INIT_CONFIG_DIR/$init_quality.json" "$CONFIG_PATH"
+    echo "=== Init quality: $init_quality (config swapped) ==="
+
+    for feedback_depth in 1 5; do
+        for show_task in 0 1; do
+            for show_metric in 0 1; do
+                for show_bounds in 0 1; do
                     count=$((count + 1))
 
                     # Build run_id (includes timestamp subdir for grid organization)
-                    run_id="${TIMESTAMP}/${BENCHMARK}_fd${feedback_depth}_t${show_task}_m${show_metric}_b${show_bounds}_s${seed}"
+                    run_id="${TIMESTAMP}/${BENCHMARK}_i${init_quality}_fd${feedback_depth}_t${show_task}_m${show_metric}_b${show_bounds}"
 
                     # Build flag strings
                     task_flag=""
@@ -87,7 +125,7 @@ for feedback_depth in 1 5; do
                     cmd="$PYTHON $PYTHON_SCRIPT \
                         --num-steps $NUM_STEPS \
                         --feedback-depth $feedback_depth \
-                        --seed $seed \
+                        --seed 0 \
                         --run-id $run_id \
                         --experiment-id $EXPERIMENT_ID \
                         $task_flag $metric_flag $bounds_flag"

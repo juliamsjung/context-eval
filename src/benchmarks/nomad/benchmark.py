@@ -12,13 +12,16 @@ from src.benchmarks.nomad.env import NomadEnv
 
 
 PARAM_BOUNDS = {
-    "learning_rate": (0.01, 0.5),
-    "max_depth": (2, 16),
+    "learning_rate": (0.005, 0.5),
+    "max_depth": (2, 20),
     "max_iter": (50, 2000),
-    "l2_regularization": (0.0, 2.0),
+    "l2_regularization": (1e-4, 5.0),
     "max_leaf_nodes": (15, 255),
     "min_samples_leaf": (1, 200),
 }
+
+LOG_SCALE_PARAMS = {"learning_rate", "l2_regularization"}
+INTEGER_KEYS = {"max_depth", "max_leaf_nodes", "max_iter", "min_samples_leaf"}
 
 
 class NomadBenchmark(BaseBenchmark):
