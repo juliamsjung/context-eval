@@ -1,0 +1,7 @@
+Root Mean Squared Error (RMSE)
+
+Submissions are scored on the root mean squared error. RMSE is defined as:
+
+RMSE = sqrt( (1/N) * sum_{i=1}^{N} (y_i - y_hat_i)^2 )
+
+where y_hat_i is the predicted value and y_i is the original value for each instance i.
