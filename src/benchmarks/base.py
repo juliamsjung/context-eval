@@ -146,8 +146,16 @@ class BaseEnv(ABC):
         ...
 
     def _init_config(self) -> None:
-        """Initialize run_config.json from base config (always reset to ensure clean baseline)."""
-        if self.base_config_path.exists():
+        """Initialize run_config.json from base config or override.
+
+        If init_override.json exists in the workspace, it takes precedence
+        over config.json. This allows the grid script to inject stratified
+        init configs without mutating the tracked config.json.
+        """
+        override_path = self.workspace / "init_override.json"
+        if override_path.exists():
+            self.config_path.write_text(override_path.read_text())
+        elif self.base_config_path.exists():
             self.config_path.write_text(self.base_config_path.read_text())
 
     def read_config(self) -> Dict[str, Any]:

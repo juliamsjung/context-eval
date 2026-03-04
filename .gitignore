@@ -46,6 +46,9 @@ htmlcov/
 *.log
 logs/
 
+# Landscape init override files (written by run_grid.sh, never committed)
+src/benchmarks/*/workspace/init_override.json
+
 # Toy bench artifacts
 src/benchmarks/toy/workspace/run_config.json
 src/benchmarks/toy/workspace/data.npy

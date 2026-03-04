@@ -90,20 +90,20 @@ FAILED_CONFIGS=()
 
 # Save original config.json for restoration
 CONFIG_PATH="src/benchmarks/${BENCHMARK}/workspace/config.json"
-ORIGINAL_CONFIG=$(cat "$CONFIG_PATH")
+OVERRIDE_PATH="src/benchmarks/${BENCHMARK}/workspace/init_override.json"
 
-# Cleanup: restore original config.json on exit (normal or error)
+# Cleanup: remove override file on exit so normal runs use config.json
 cleanup() {
-    echo "$ORIGINAL_CONFIG" > "$CONFIG_PATH"
+    rm -f "$OVERRIDE_PATH"
 }
 trap cleanup EXIT
 trap 'echo -e "\nInterrupted. Exiting..."; exit 130' INT
 
 count=0
 for init_quality in low neutral high; do
-    # Swap workspace config.json with the stratified init config
-    cp "$INIT_CONFIG_DIR/$init_quality.json" "$CONFIG_PATH"
-    echo "=== Init quality: $init_quality (config swapped) ==="
+    # Write override file (config.json is never touched)
+    cp "$INIT_CONFIG_DIR/$init_quality.json" "$OVERRIDE_PATH"
+    echo "=== Init quality: $init_quality (override written) ==="
 
     for feedback_depth in 1 5; do
         for show_task in 0 1; do

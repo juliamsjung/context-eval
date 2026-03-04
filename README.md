@@ -136,15 +136,18 @@ context-eval/
 
 ```bash
 # 1. Landscape characterization (one-time per benchmark, no LLM needed)
-python scripts/run_landscape.py --benchmark nomad --num-samples 200
+python scripts/run_landscape.py --benchmark <benchmark> --num-samples 200
 
 # 2. Single benchmark run
-python run_nomad_bench.py --num-steps 10 --show-task --show-metric
+python run_<benchmark>_bench.py --num-steps 10 --show-task --show-metric
 
 # 3. Full experiment grid (48 runs: 3 init qualities × 16 context policies)
-./scripts/run_grid.sh nomad --dry-run    # preview commands
-./scripts/run_grid.sh nomad              # run full grid
+#    Requires landscape characterization (step 1) to have been run first.
+./scripts/run_grid.sh <benchmark> --dry-run    # preview commands
+./scripts/run_grid.sh <benchmark>              # run full grid
 ```
+
+Where `<benchmark>` is one of: `nomad`, `jigsaw`, `forest`, `toy`.
 
 Results saved to `logs/` (landscape in `logs/landscape/`, traces in `logs/traces/`, run summaries in `logs/runs/`).
 
