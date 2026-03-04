@@ -90,6 +90,18 @@ src/benchmarks/forest/workspace/dataset_context.json
 src/benchmarks/forest/workspace/prepared_meta.json
 src/benchmarks/forest/workspace/results.json
 
+# Kaggle Housing data (downloaded locally)
+kaggle-data/housing/raw/
+kaggle-data/housing/processed/
+
+# Housing bench artifacts
+src/benchmarks/housing/workspace/run_config.json
+src/benchmarks/housing/workspace/features.npy
+src/benchmarks/housing/workspace/targets.npy
+src/benchmarks/housing/workspace/dataset_context.json
+src/benchmarks/housing/workspace/prepared_meta.json
+src/benchmarks/housing/workspace/results.json
+
 # New directories for experiment outputs
 outputs/
 data/
