@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Regression trainer for the California Housing bench.
-Uses GradientBoostingRegressor for varied model exploration across benchmarks.
+Uses ExtraTreesRegressor for varied model exploration across benchmarks.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import math
 from pathlib import Path
 
 import numpy as np
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -40,13 +40,13 @@ def main() -> None:
     random_seed = int(cfg.get("random_seed", 0))
     test_size = float(cfg.get("test_size", 0.2))
 
-    # GradientBoostingRegressor hyperparameters (tunable by LLM)
+    # ExtraTreesRegressor hyperparameters (tunable by LLM)
     n_estimators = int(cfg.get("n_estimators", 100))
-    max_depth = int(cfg.get("max_depth", 5))
-    learning_rate = float(cfg.get("learning_rate", 0.1))
-    subsample = float(cfg.get("subsample", 1.0))
+    max_depth = int(cfg.get("max_depth", 10))
     min_samples_split = int(cfg.get("min_samples_split", 5))
-    min_samples_leaf = int(cfg.get("min_samples_leaf", 5))
+    min_samples_leaf = int(cfg.get("min_samples_leaf", 2))
+    max_features = float(cfg.get("max_features", 0.8))
+    bootstrap = bool(cfg.get("bootstrap", False))
 
     X, y = _load_arrays()
     X_train, X_test, y_train, y_test = train_test_split(
@@ -56,14 +56,15 @@ def main() -> None:
         random_state=random_seed,
     )
 
-    model = GradientBoostingRegressor(
+    model = ExtraTreesRegressor(
         n_estimators=n_estimators,
         max_depth=max_depth,
-        learning_rate=learning_rate,
-        subsample=subsample,
         min_samples_split=min_samples_split,
         min_samples_leaf=min_samples_leaf,
+        max_features=max_features,
+        bootstrap=bootstrap,
         random_state=random_seed,
+        n_jobs=-1,
     )
 
     pipeline = Pipeline(

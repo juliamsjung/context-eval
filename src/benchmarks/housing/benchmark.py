@@ -12,17 +12,17 @@ from src.benchmarks.housing.env import HousingEnv
 
 
 PARAM_BOUNDS = {
-    "n_estimators": (50, 1000),
-    "max_depth": (2, 16),
-    "learning_rate": (0.01, 0.5),
-    "subsample": (0.5, 1.0),
-    "min_samples_split": (2, 50),
-    "min_samples_leaf": (1, 50),
+    "n_estimators": (10, 1500),
+    "max_depth": (2, 80),
+    "min_samples_split": (2, 80),
+    "min_samples_leaf": (1, 60),
+    "max_features": (0.05, 1.0),
+    "bootstrap": (0, 1),
 }
 
 
 class HousingBenchmark(BaseBenchmark):
-    """California Housing regression benchmark using GradientBoostingRegressor."""
+    """California Housing regression benchmark using ExtraTreesRegressor."""
 
     def __init__(self, config: BenchmarkConfig):
         super().__init__(config)
@@ -68,17 +68,9 @@ class HousingBenchmark(BaseBenchmark):
             ),
             "max_depth": int(
                 _clamp(
-                    current_config.get("max_depth", 5) + (1 if step % 2 == 0 else -1),
+                    current_config.get("max_depth", 10) + (2 if step % 2 == 0 else -2),
                     PARAM_BOUNDS["max_depth"],
                 )
-            ),
-            "learning_rate": _clamp(
-                current_config.get("learning_rate", 0.1) * factor,
-                PARAM_BOUNDS["learning_rate"],
-            ),
-            "subsample": _clamp(
-                current_config.get("subsample", 1.0) * (0.95 if step % 2 == 0 else 1.05),
-                PARAM_BOUNDS["subsample"],
             ),
             "min_samples_split": int(
                 _clamp(
@@ -88,16 +80,21 @@ class HousingBenchmark(BaseBenchmark):
             ),
             "min_samples_leaf": int(
                 _clamp(
-                    current_config.get("min_samples_leaf", 5) + (1 if step % 2 == 0 else -1),
+                    current_config.get("min_samples_leaf", 2) + (1 if step % 2 == 0 else -1),
                     PARAM_BOUNDS["min_samples_leaf"],
                 )
             ),
+            "max_features": _clamp(
+                current_config.get("max_features", 0.8) * (1.1 if step % 2 == 0 else 0.9),
+                PARAM_BOUNDS["max_features"],
+            ),
+            "bootstrap": current_config.get("bootstrap", False),
         }
 
     def sanitize_config(self, proposal: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         return sanitize_with_clamp_tracking(
             proposal, PARAM_BOUNDS,
-            integer_keys={"n_estimators", "max_depth", "min_samples_split", "min_samples_leaf"},
+            integer_keys={"n_estimators", "max_depth", "min_samples_split", "min_samples_leaf", "bootstrap"},
         )
 
     def _get_primary_score(self, metrics: Dict[str, float]) -> float:
@@ -119,7 +116,7 @@ class HousingBenchmark(BaseBenchmark):
 
     def _get_task_intro(self) -> str:
         """Return task-specific introduction text."""
-        return "You are tuning a GradientBoostingRegressor for California housing price prediction."
+        return "You are tuning an ExtraTreesRegressor for California housing price prediction."
 
     def _get_output_format_instructions(self) -> str:
         """Return output format instructions."""
