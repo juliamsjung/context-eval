@@ -61,6 +61,10 @@ context-eval/
 │   │   ├── builder.py
 │   │   ├── formatter.py
 │   │   └── schema.py
+│   ├── optimizers/          # Optimizer strategies (strategy pattern)
+│   │   ├── base.py          # BaseOptimizer ABC
+│   │   ├── llm.py           # LLM-based optimizer (default)
+│   │   └── random.py        # Random search baseline
 │   ├── trace/               # Trace layer (full observability, never exposed)
 │   │   ├── logger.py
 │   │   ├── run_summary.py
@@ -84,9 +88,12 @@ context-eval/
 ## Quick Start
 
 ```bash
-# Single benchmark runs
+# Single benchmark runs (LLM optimizer, default)
 python run_toy_bench.py --num-steps 5
 python run_nomad_bench.py --num-steps 5 --show-task --show-metric
+
+# Random search baseline (for comparison)
+python run_toy_bench.py --num-steps 10 --optimizer random --seed 42
 
 # Experiment grids (48 runs across all context axis combinations)
 ./scripts/run_grid.sh toy --dry-run    # preview commands
@@ -260,6 +267,12 @@ These flags control what information the LLM agent sees:
 | `--show-metric` | off | Include metric description in LLM prompt |
 | `--show-bounds` | off | Include parameter bounds (valid ranges) in LLM prompt |
 | `--feedback-depth` | 1 | Feedback depth: number of visible outcome signals (1=current only, 5=current+4 history) |
+
+### Optimizer Selection
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--optimizer` | llm | Optimization strategy: `llm` (LLM-based) or `random` (uniform sampling baseline) |
 
 ### Experiment Settings
 

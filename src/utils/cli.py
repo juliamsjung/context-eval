@@ -41,6 +41,15 @@ def parse_benchmark_args(
     parser.add_argument("--feedback-depth", type=int, default=1,
                         help="Feedback depth: number of visible outcome signals (1=current only, 5=current+4 history).")
 
+    # Optimizer selection
+    parser.add_argument(
+        "--optimizer",
+        type=str,
+        choices=["llm", "random"],
+        default="llm",
+        help="Optimization strategy (default: llm)"
+    )
+
     # Developer tools
     parser.add_argument("--debug-show-llm", action="store_true", help="Print full LLM request and response for debugging.")
     parser.add_argument("--debug-show-diff", action="store_true", help="Show config changes at each step.")
