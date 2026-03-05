@@ -426,7 +426,6 @@ class BaseBenchmark(ABC):
                 integer_keys=self._get_integer_keys(),
                 is_higher_better=self._is_higher_better(),
                 config=optimizer_config,
-                benchmark=self,
             )
         return self._optimizer
 
@@ -439,7 +438,8 @@ class BaseBenchmark(ABC):
         """Propose config using configured optimizer.
 
         Returns:
-            Tuple of (proposal, source, token_usage, parse_failure, clamp_events)
+            Tuple of (proposal, source, token_usage, parse_failure, clamp_events).
+            Note: parse_failure is always False for non-LLM optimizers.
         """
         # For LLM optimizer, use existing _llm_propose for full functionality
         if self.config.optimizer == "llm":
@@ -711,6 +711,10 @@ class BaseBenchmark(ABC):
         """
         self.setup_logger(run_id)
         self.history = []
+
+        # Reset optimizer state for reproducibility (non-LLM optimizers only)
+        if self.config.optimizer != "llm":
+            self._get_optimizer().reset()
 
         # Get initial config and run baseline
         current_config = self.get_default_config()

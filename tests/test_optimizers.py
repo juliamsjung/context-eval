@@ -158,13 +158,13 @@ class TestCreateOptimizer:
                 config=OptimizerConfig(seed=0),
             )
 
-    def test_create_llm_optimizer_requires_benchmark(self):
-        with pytest.raises(ValueError, match="benchmark is required"):
+    def test_create_llm_optimizer_raises(self):
+        """LLM optimizer uses direct path, not optimizer abstraction."""
+        with pytest.raises(ValueError, match="LLM optimizer uses direct path"):
             create_optimizer(
                 optimizer_type="llm",
                 param_bounds={"C": (0.01, 100.0)},
                 integer_keys=set(),
                 is_higher_better=True,
                 config=OptimizerConfig(seed=0),
-                benchmark=None,
             )

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from src.optimizers.base import BaseOptimizer, OptimizerConfig
 
@@ -18,7 +18,7 @@ class RandomSearchOptimizer(BaseOptimizer):
     def __init__(
         self,
         param_bounds: Dict[str, Tuple[float, float]],
-        integer_keys: set,
+        integer_keys: Set[str],
         is_higher_better: bool,
         config: OptimizerConfig,
     ):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 @dataclass
@@ -22,7 +22,7 @@ class BaseOptimizer(ABC):
     def __init__(
         self,
         param_bounds: Dict[str, Tuple[float, float]],
-        integer_keys: set,
+        integer_keys: Set[str],
         is_higher_better: bool,
         config: OptimizerConfig,
     ):
