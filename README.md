@@ -63,8 +63,7 @@ context-eval/
 │   │   └── schema.py
 │   ├── optimizers/          # Optimizer strategies (strategy pattern)
 │   │   ├── base.py          # BaseOptimizer ABC
-│   │   ├── llm.py           # LLM-based optimizer (default)
-│   │   └── random.py        # Random search baseline
+│   │   └── random.py        # Random search baseline (LLM uses direct path)
 │   ├── trace/               # Trace layer (full observability, never exposed)
 │   │   ├── logger.py
 │   │   ├── run_summary.py
