@@ -222,6 +222,7 @@ We use Kaggle datasets as data sources. Benchmarks run **offline** using prepare
    - [NOMAD 2018](https://www.kaggle.com/competitions/nomad2018-predict-transparent-conductors) - Click "Late Submission"
    - [Jigsaw Toxic Comment](https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge) - Click "Late Submission"
    - [Forest Cover Type](https://www.kaggle.com/c/forest-cover-type-prediction) - Click "Late Submission"
+   - [California Housing](https://www.kaggle.com/competitions/playground-series-s3e1) - Click "Late Submission" (Kaggle's Playground Series)
 
 ---
 
@@ -285,6 +286,25 @@ Prepared data saved to `src/benchmarks/forest/workspace/`.
 
 ---
 
+### California Housing Dataset (Regression - Tabular Data)
+
+```bash
+# 1. Fetch from Kaggle
+python3 scripts/fetch_housing.py
+
+# 2. Unzip the nested archives
+cd kaggle-data/housing/raw
+unzip -o playground-series-s3e1.zip
+cd ../../..
+
+# 3. Prepare offline artifacts
+python3 scripts/prepare_housing.py --float32
+```
+
+Prepared data saved to `src/benchmarks/housing/workspace/`.
+
+---
+
 ## CLI Options
 
 ### Context Axes
@@ -326,4 +346,5 @@ These flags control what information the LLM agent sees:
 | `run_nomad_bench.py` | NOMAD 2018 | Materials science regression |
 | `run_jigsaw_bench.py` | Jigsaw Toxic Comments | Multi-label text classification |
 | `run_forest_bench.py` | Forest Cover Type | Multi-class forest cover classification |
+| `run_housing_bench.py` | California Housing | Housing price regression |
 
