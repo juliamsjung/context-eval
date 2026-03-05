@@ -104,6 +104,11 @@ class TestBenchmarkConstants:
             set(),
             {"n_estimators", "max_depth", "min_samples_split", "min_samples_leaf"},
         ),
+        (
+            "src.benchmarks.housing.benchmark",
+            set(),
+            {"n_estimators", "max_depth", "min_samples_split", "min_samples_leaf", "bootstrap"},
+        ),
     ])
     def test_constants_exist(self, benchmark_module, expected_log, expected_int):
         import importlib
@@ -115,6 +120,7 @@ class TestBenchmarkConstants:
         "src.benchmarks.nomad.benchmark",
         "src.benchmarks.jigsaw.benchmark",
         "src.benchmarks.forest.benchmark",
+        "src.benchmarks.housing.benchmark",
     ])
     def test_log_scale_params_subset_of_bounds(self, benchmark_module):
         """LOG_SCALE_PARAMS must be a subset of PARAM_BOUNDS keys."""
@@ -126,6 +132,7 @@ class TestBenchmarkConstants:
         "src.benchmarks.nomad.benchmark",
         "src.benchmarks.jigsaw.benchmark",
         "src.benchmarks.forest.benchmark",
+        "src.benchmarks.housing.benchmark",
     ])
     def test_integer_keys_subset_of_bounds(self, benchmark_module):
         """INTEGER_KEYS must be a subset of PARAM_BOUNDS keys."""
@@ -137,6 +144,7 @@ class TestBenchmarkConstants:
         "src.benchmarks.nomad.benchmark",
         "src.benchmarks.jigsaw.benchmark",
         "src.benchmarks.forest.benchmark",
+        "src.benchmarks.housing.benchmark",
     ])
     def test_log_scale_params_have_positive_bounds(self, benchmark_module):
         """Log-scale params must have strictly positive lower bounds."""

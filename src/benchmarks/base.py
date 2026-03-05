@@ -157,6 +157,11 @@ class BaseEnv(ABC):
             self.config_path.write_text(override_path.read_text())
         elif self.base_config_path.exists():
             self.config_path.write_text(self.base_config_path.read_text())
+        else:
+            raise FileNotFoundError(
+                f"Base config missing at {self.base_config_path} "
+                f"and no init_override.json found."
+            )
 
     def read_config(self) -> Dict[str, Any]:
         """Read the current run configuration."""

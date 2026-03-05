@@ -44,6 +44,10 @@ def _register_benchmarks() -> None:
         ForestBenchmark, PARAM_BOUNDS as FOREST_BOUNDS,
         LOG_SCALE_PARAMS as FOREST_LOG, INTEGER_KEYS as FOREST_INT,
     )
+    from src.benchmarks.housing.benchmark import (
+        HousingBenchmark, PARAM_BOUNDS as HOUSING_BOUNDS,
+        LOG_SCALE_PARAMS as HOUSING_LOG, INTEGER_KEYS as HOUSING_INT,
+    )
     from src.benchmarks.base import BenchmarkConfig
 
     # Minimal config — no LLM needed for landscape evaluation
@@ -74,6 +78,14 @@ def _register_benchmarks() -> None:
             "integer_keys": FOREST_INT,
             "higher_is_better": True,  # Accuracy: higher is better
         },
+        "housing": {
+            "benchmark_class": HousingBenchmark,
+            "config": dummy_config,
+            "param_bounds": HOUSING_BOUNDS,
+            "log_scale_params": HOUSING_LOG,
+            "integer_keys": HOUSING_INT,
+            "higher_is_better": False,  # RMSE: lower is better
+        },
     })
 
 
@@ -83,7 +95,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--benchmark", type=str, required=True,
-        choices=["nomad", "jigsaw", "forest"],
+        choices=["nomad", "jigsaw", "forest", "housing"],
         help="Benchmark to characterize.",
     )
     parser.add_argument(
