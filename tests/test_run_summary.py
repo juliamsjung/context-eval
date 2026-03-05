@@ -21,6 +21,8 @@ class TestRunSummary:
             git_commit="abc1234",
             model_name="gpt-4o-mini",
             temperature=0.0,
+            optimizer="llm",
+            evaluation_budget=5,
             axis_signature="fd1_t0_m0_b0",
             feedback_depth=1,
             show_task=False,
@@ -40,6 +42,8 @@ class TestRunSummary:
 
         assert d["benchmark"] == "toy"
         assert d["seed"] == 0
+        assert d["optimizer"] == "llm"
+        assert d["evaluation_budget"] == 5
         assert d["axis_signature"] == "fd1_t0_m0_b0"
         assert d["final_score"] == 0.85
         assert d["best_score"] == 0.87
@@ -58,6 +62,8 @@ class TestRunSummary:
             git_commit=None,
             model_name="gpt-4o",
             temperature=0.7,
+            optimizer="random",
+            evaluation_budget=10,
             axis_signature="fd5_t1_m1_b1",
             feedback_depth=5,
             show_task=True,
@@ -77,6 +83,8 @@ class TestRunSummary:
         json_str = json.dumps(summary.to_dict())
         parsed = json.loads(json_str)
         assert parsed["benchmark"] == "nomad"
+        assert parsed["optimizer"] == "random"
+        assert parsed["evaluation_budget"] == 10
 
 
 class TestRunSummaryAggregation:
@@ -183,6 +191,7 @@ class TestRunSummaryFileOutput:
                 experiment_id="default",
                 timestamp="2026-01-15T12:00:00Z", git_commit="abc1234",
                 model_name="gpt-4o-mini", temperature=0.0,
+                optimizer="llm", evaluation_budget=3,
                 axis_signature="fd1_t0_m0_b0",
                 feedback_depth=1, show_task=False, show_metric=False,
                 show_bounds=False,
@@ -213,6 +222,7 @@ class TestRunSummaryFileOutput:
                     experiment_id="default",
                     timestamp="2026-01-15T12:00:00Z", git_commit="abc1234",
                     model_name="gpt-4o-mini", temperature=0.0,
+                    optimizer="llm", evaluation_budget=3,
                     axis_signature="fd1_t0_m0_b0",
                     feedback_depth=1, show_task=False, show_metric=False,
                     show_bounds=False,

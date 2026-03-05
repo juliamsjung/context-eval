@@ -26,6 +26,8 @@ from src.config.paths import RUNS_ROOT
 from src.trace import RunLogger, start_run, RunSummary, TRACE_ONLY_FIELDS
 # CONTEXT ONLY imports
 from src.context import ContextBundle, ContextAxes, ContextBuilder, format_context_sections
+# OPTIMIZER imports
+from src.optimizers import create_optimizer, OptimizerConfig, BaseOptimizer
 
 
 # Model pricing per million tokens (as of Jan 2025)
@@ -181,6 +183,7 @@ class BenchmarkConfig:
     model: str = "gpt-4o-mini"
     temperature: float = 0
     experiment_id: str = "default"
+    optimizer: str = "llm"  # "llm", "random"
     debug_show_llm: bool = False
     debug_show_diff: bool = False
     verbose: bool = False
@@ -198,6 +201,7 @@ class BenchmarkConfig:
             model=args.model,
             temperature=args.temperature,
             experiment_id=args.experiment_id,
+            optimizer=args.optimizer,
             debug_show_llm=args.debug_show_llm,
             debug_show_diff=args.debug_show_diff,
             verbose=args.verbose,
@@ -404,18 +408,54 @@ class BaseBenchmark(ABC):
         """Extract primary score for agent feedback. Subclass must implement."""
         ...
 
+    def _get_integer_keys(self) -> set:
+        """Return set of parameter names that should be integers.
+
+        Default implementation returns empty set. Subclasses should override
+        to specify integer parameters.
+        """
+        return set()
+
+    def _get_optimizer(self) -> BaseOptimizer:
+        """Get or create the optimizer instance."""
+        if not hasattr(self, "_optimizer") or self._optimizer is None:
+            optimizer_config = OptimizerConfig(seed=self.config.seed)
+            self._optimizer = create_optimizer(
+                optimizer_type=self.config.optimizer,
+                param_bounds=self.param_bounds,
+                integer_keys=self._get_integer_keys(),
+                is_higher_better=self._is_higher_better(),
+                config=optimizer_config,
+            )
+        return self._optimizer
+
     def propose_config(
         self,
         current_config: Dict[str, Any],
         last_metrics: Dict[str, float],
         history: List[IterationResult],
     ) -> Tuple[Optional[Dict[str, Any]], str, Optional[Dict[str, Any]], bool, List[Dict[str, Any]]]:
-        """Propose config using direct LLM call.
+        """Propose config using configured optimizer.
 
         Returns:
-            Tuple of (proposal, source, token_usage, parse_failure, clamp_events)
+            Tuple of (proposal, source, token_usage, parse_failure, clamp_events).
+            Note: parse_failure is always False for non-LLM optimizers.
         """
-        return self._llm_propose(current_config, last_metrics, history)
+        # For LLM optimizer, use existing _llm_propose for full functionality
+        if self.config.optimizer == "llm":
+            return self._llm_propose(current_config, last_metrics, history)
+
+        # For other optimizers, use the optimizer abstraction
+        optimizer = self._get_optimizer()
+        simplified_history = [
+            {"config": r.config, "score": self._get_primary_score(r.metrics)}
+            for r in history
+        ]
+        proposal, source, token_usage = optimizer.propose(
+            current_config, self._get_primary_score(last_metrics), simplified_history
+        )
+        sanitized, clamp_events = self.sanitize_config(proposal)
+        return sanitized, source, token_usage, False, clamp_events
 
     def _llm_propose(
         self,
@@ -630,6 +670,8 @@ class BaseBenchmark(ABC):
             git_commit=_get_git_commit(),
             model_name=self.config.model,
             temperature=self.config.temperature,
+            optimizer=self.config.optimizer,
+            evaluation_budget=self.config.num_steps,
             axis_signature=axis_signature,
             feedback_depth=self.config.feedback_depth,
             show_task=self.config.show_task,
@@ -669,6 +711,10 @@ class BaseBenchmark(ABC):
         """
         self.setup_logger(run_id)
         self.history = []
+
+        # Reset optimizer state for reproducibility (non-LLM optimizers only)
+        if self.config.optimizer != "llm":
+            self._get_optimizer().reset()
 
         # Get initial config and run baseline
         current_config = self.get_default_config()
