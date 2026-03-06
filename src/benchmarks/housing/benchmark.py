@@ -20,6 +20,9 @@ PARAM_BOUNDS = {
     "bootstrap": (0, 1),
 }
 
+LOG_SCALE_PARAMS: set = set()  # No log-scale params for ExtraTrees
+INTEGER_KEYS = {"n_estimators", "max_depth", "min_samples_split", "min_samples_leaf", "bootstrap"}
+
 
 class HousingBenchmark(BaseBenchmark):
     """California Housing regression benchmark using ExtraTreesRegressor."""

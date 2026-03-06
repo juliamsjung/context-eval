@@ -31,13 +31,61 @@ We vary four context axes:
 | `show_bounds` | Explicit hyperparameter bounds (feasible region) |
 | `feedback_depth` | Number of prior optimization steps visible to the agent (1 = current only, 5 = current + 4 history) |
 
-By running a full factorial grid (2×2×2×2 = 16 configurations × 3 seeds = 48 runs), we estimate the marginal and interaction effects of each axis on:
+By running a full factorial grid (2×2×2×2 = 16 context policies × 3 init qualities = 48 runs per benchmark), we estimate the marginal and interaction effects of each axis on:
 - Optimization outcome (best achieved metric)
 - Convergence efficiency
 - Behavioral stability (oscillation, variance)
 - Constraint violations (clamp events)
 
 Importantly, diagnostic signals and resource usage are always recorded in the trace layer but never shown to the agent, ensuring no trace-only signals are exposed to the agent.
+
+## Two-Phase Diagnostic Architecture
+
+To ensure that performance gains are attributed solely to informational visibility—not initialization bias or search space differences—ContextEval uses a two-phase approach modeled after Sequential Model-Based Optimization (SMBO) standards.
+
+### Phase 1: Landscape Characterization
+
+Before running any LLM agent experiments, we map the performance landscape of each benchmark:
+
+1. **Space-filling sampling** — Generate 256 configurations via **Sobol sequences** (quasi-random, power of 2 for exact balance), providing superior coverage of the hyperparameter space compared to uniform random sampling.
+2. **Batch evaluation** — Evaluate each configuration against the benchmark's training pipeline (no LLM involved).
+3. **Score distribution** — This establishes the empirical performance distribution, providing a **Random Search baseline** for free.
+
+Parameters spanning multiple orders of magnitude (e.g., `learning_rate`, `C`) are sampled on a **logarithmic scale** to ensure equal coverage across different scales.
+
+### Phase 2: Performance-Stratified Initialization
+
+From the 256 evaluated samples, we select three representative starting configurations using **normalized regret** with guard bands:
+
+| Init Quality | Stratum (Normalized Regret) | What It Tests |
+|---|---|---|
+| **High** | r ≤ 0.20 (top 20%) | Can the agent fine-tune near the optimum? |
+| **Neutral** | 0.45 ≤ r ≤ 0.55 (middle 10%) | Can the agent improve from an average start? |
+| **Low** | r ≥ 0.80 (bottom 20%) | Can the agent recover from a poor starting point? |
+
+Guard bands (0.20–0.45 and 0.55–0.80) are excluded to ensure clean separation between strata.
+
+These three starting configs replace fixed seed-based initialization, allowing us to isolate the agent's **optimization ability** independently of where it starts.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 1: Landscape Characterization (one-time, no LLM)       │
+│                                                                 │
+│  Sobol Sampling  →  Batch Evaluation  →  Stratum Selection     │
+│  (256 configs)      (run_training)       (high/neutral/low)   │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 2: LLM Agent Experiments (144 runs per benchmark)       │
+│                                                                 │
+│  For each init quality (low, neutral, high):                   │
+│    For each context policy (16 combinations):                  │
+│      For each seed (0, 1, 2):                                  │
+│        Run T=10 optimization steps with LLM agent              │
+│        Log configs, metrics, clamp events, token usage         │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Architecture Overview
 
@@ -61,6 +109,10 @@ context-eval/
 │   │   ├── builder.py
 │   │   ├── formatter.py
 │   │   └── schema.py
+│   ├── landscape/           # Landscape characterization (Phase 1)
+│   │   ├── sampler.py       #   Sobol quasi-random sampling
+│   │   ├── runner.py        #   Batch evaluation
+│   │   └── selector.py      #   Stratum-based init selection (normalized regret)
 │   ├── optimizers/          # Optimizer strategies (strategy pattern)
 │   │   ├── base.py          # BaseOptimizer ABC
 │   │   └── random.py        # Random search baseline (LLM uses direct path)
@@ -70,8 +122,10 @@ context-eval/
 │   │   └── schema.py
 │   └── utils/
 ├── scripts/
-├── experiments/
+│   ├── run_landscape.py     # Landscape characterization entry point
+│   └── run_grid.sh          # Experiment grid runner
 ├── logs/
+│   ├── landscape/           # Landscape results + init configs
 │   ├── traces/
 │   └── runs/
 └── run_*_bench.py
@@ -87,20 +141,24 @@ context-eval/
 ## Quick Start
 
 ```bash
-# Single benchmark runs (LLM optimizer, default)
-python run_toy_bench.py --num-steps 5
-python run_nomad_bench.py --num-steps 5 --show-task --show-metric
+# 1. Landscape characterization (one-time per benchmark, no LLM needed)
+python scripts/run_landscape.py --benchmark <benchmark> --n-configs 256
+
+# 2. Single benchmark run
+python run_<benchmark>_bench.py --num-steps 10 --show-task --show-metric
 
 # Random search baseline (for comparison)
-python run_toy_bench.py --num-steps 10 --optimizer random --seed 42
+python run_<benchmark>_bench.py --num-steps 10 --optimizer random --seed 42
 
-# Experiment grids (48 runs across all context axis combinations)
-./scripts/run_grid.sh toy --dry-run    # preview commands
-./scripts/run_grid.sh toy              # run full grid
-./scripts/run_grid.sh nomad
+# 3. Full experiment grid (48 runs: 3 init qualities × 16 context policies)
+#    Requires landscape characterization (step 1) to have been run first.
+./scripts/run_grid.sh <benchmark> --dry-run    # preview commands
+./scripts/run_grid.sh <benchmark>              # run full grid
 ```
 
-Results saved to `logs/` (traces in `logs/traces/`, run summaries in `logs/runs/`).
+Where `<benchmark>` is one of: `nomad`, `jigsaw`, `forest`, `toy`.
+
+Results saved to `logs/` (landscape in `logs/landscape/`, traces in `logs/traces/`, run summaries in `logs/runs/`).
 
 ---
 
@@ -127,6 +185,7 @@ pip install -r requirements.txt
 | `openai` | LLM API client |
 | `pandas`, `numpy` | Data manipulation |
 | `scikit-learn` | ML models and metrics |
+| `scipy` | Sobol sequences for landscape characterization |
 
 **Analysis & Visualization:**
 | Package | Purpose |

@@ -12,12 +12,15 @@ from src.benchmarks.jigsaw.env import JigsawEnv
 
 
 PARAM_BOUNDS = {
-    "max_features": (1000, 50000),
+    "max_features": (500, 100000),
     "ngram_max": (1, 3),
-    "min_df": (1, 20),
-    "C": (0.01, 10.0),
-    "max_iter": (50, 1000),
+    "min_df": (1, 30),
+    "C": (0.001, 100.0),
+    "max_iter": (50, 2000),
 }
+
+LOG_SCALE_PARAMS = {"C", "max_features"}
+INTEGER_KEYS = {"max_features", "ngram_max", "min_df", "max_iter"}
 
 
 class JigsawBenchmark(BaseBenchmark):
