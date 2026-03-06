@@ -2,98 +2,51 @@
 
 ## Overview
 
-ContextEval is a benchmarking framework that isolates and studies the causal effects of context visibility on LLM agent behavior in iterative machine learning workflows.
+ContextEval is a benchmarking framework that studies **how context visibility affects LLM optimizer behavior** in iterative ML workflows.
 
-ContextEval does not modify model architecture or prompt phrasing; it manipulates only structured informational access.
+We vary four context axes while holding fixed: base LLM, dataset, optimization horizon, and training environment.
 
 ContextEval is not a prompt-engineering toolkit; it is a controlled experimental framework for studying informational exposure.
 
-## Problem Statement
+## Research Question
 
-When LLM agents are deployed as autonomous optimizers in machine learning workflows (e.g., hyperparameter tuning), their behavior depends on the information made visible to them at each step.
+> **Which categories of context are necessary for effective LLM-based optimization?**
 
-However, it remains unclear:
+| Context Axis | Description |
+|--------------|-------------|
+| `show_task` | Task description |
+| `show_metric` | Metric definition |
+| `show_bounds` | Parameter bounds |
+| `feedback_depth` | History depth (1 or 5) |
 
-> **Which categories of context are necessary and sufficient for stable and efficient iterative optimization?**
+## Experimental Design
 
-ContextEval treats context visibility as an experimental variable. We isolate the causal effect of informational access while holding the following fixed:
-- Base LLM
-- Dataset and task
-- Optimization horizon (number of steps, fixed across all configurations)
-- Offline training environment
+Two-phase approach to isolate context effects from initialization bias.
 
-We vary four context axes:
+### Phase 1: Landscape Characterization (one-time, no LLM)
 
-| Axis | Description |
-|------|-------------|
-| `show_task` | Task description (problem framing) |
-| `show_metric` | Evaluation metric definition |
-| `show_bounds` | Explicit hyperparameter bounds (feasible region) |
-| `feedback_depth` | Number of prior optimization steps visible to the agent (1 = current only, 5 = current + 4 history) |
+- 256 Sobol-sampled configurations per benchmark
+- Establishes performance distribution and random search baseline
+- Selects stratified init configs using normalized regret:
 
-By running a full factorial grid (2×2×2×2 = 16 context policies × 3 init qualities = 48 runs per benchmark), we estimate the marginal and interaction effects of each axis on:
-- Optimization outcome (best achieved metric)
-- Convergence efficiency
-- Behavioral stability (oscillation, variance)
-- Constraint violations (clamp events)
+| Init | Stratum | Purpose |
+|------|---------|---------|
+| High | r ≤ 0.20 | Fine-tuning near optimum |
+| Neutral | 0.45 ≤ r ≤ 0.55 | Improving from average |
+| Low | r ≥ 0.80 | Recovering from poor start |
 
-Importantly, diagnostic signals and resource usage are always recorded in the trace layer but never shown to the agent, ensuring no trace-only signals are exposed to the agent.
+### Phase 2: LLM Experiments (144 runs per benchmark)
 
-## Two-Phase Diagnostic Architecture
+- 3 init qualities × 16 context policies × 3 seeds
+- T=10 optimization steps per run
 
-To ensure that performance gains are attributed solely to informational visibility—not initialization bias or search space differences—ContextEval uses a two-phase approach modeled after Sequential Model-Based Optimization (SMBO) standards.
+### Random Search Baseline (9 runs per benchmark)
 
-### Phase 1: Landscape Characterization
+- 3 init qualities × 3 seeds
+- Same init configs as LLM for fair comparison
+- Zero API cost
 
-Before running any LLM agent experiments, we map the performance landscape of each benchmark:
-
-1. **Space-filling sampling** — Generate 256 configurations via **Sobol sequences** (quasi-random, power of 2 for exact balance), providing superior coverage of the hyperparameter space compared to uniform random sampling.
-2. **Batch evaluation** — Evaluate each configuration against the benchmark's training pipeline (no LLM involved).
-3. **Score distribution** — This establishes the empirical performance distribution, providing a **Random Search baseline** for free.
-
-Parameters spanning multiple orders of magnitude (e.g., `learning_rate`, `C`) are sampled on a **logarithmic scale** to ensure equal coverage across different scales.
-
-### Phase 2: Performance-Stratified Initialization
-
-From the 256 evaluated samples, we select three representative starting configurations using **normalized regret** with guard bands:
-
-| Init Quality | Stratum (Normalized Regret) | What It Tests |
-|---|---|---|
-| **High** | r ≤ 0.20 (top 20%) | Can the agent fine-tune near the optimum? |
-| **Neutral** | 0.45 ≤ r ≤ 0.55 (middle 10%) | Can the agent improve from an average start? |
-| **Low** | r ≥ 0.80 (bottom 20%) | Can the agent recover from a poor starting point? |
-
-Guard bands (0.20–0.45 and 0.55–0.80) are excluded to ensure clean separation between strata.
-
-These three starting configs replace fixed seed-based initialization, allowing us to isolate the agent's **optimization ability** independently of where it starts.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Phase 1: Landscape Characterization (one-time, no LLM)       │
-│                                                                 │
-│  Sobol Sampling  →  Batch Evaluation  →  Stratum Selection     │
-│  (256 configs)      (run_training)       (high/neutral/low)   │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Phase 2: LLM Agent Experiments (144 runs per benchmark)       │
-│                                                                 │
-│  For each init quality (low, neutral, high):                   │
-│    For each context policy (16 combinations):                  │
-│      For each seed (0, 1, 2):                                  │
-│        Run T=10 optimization steps with LLM agent              │
-│        Log configs, metrics, clamp events, token usage         │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Architecture Overview
-
-ContextEval enforces strict separation between execution, context projection, and trace logging to guarantee experimental isolation and prevent context leakage.
-
-- **Execution Layer**: Runs optimization steps and training.
-- **Context Layer**: Controls what information is exposed to the LLM.
-- **Trace Layer**: Logs full system state for analysis (never exposed to the LLM).
+## Project Structure
 
 ```
 context-eval/
@@ -101,8 +54,9 @@ context-eval/
 │   ├── benchmarks/          # Execution layer (training + iteration logic)
 │   │   ├── base.py
 │   │   ├── nomad/
-│   │   ├── jigsaw/
 │   │   ├── forest/
+│   │   ├── housing/
+│   │   ├── jigsaw/
 │   │   └── toy/
 │   ├── context/             # Context projection layer (LLM-visible data only)
 │   │   ├── axes.py
@@ -123,20 +77,14 @@ context-eval/
 │   └── utils/
 ├── scripts/
 │   ├── run_landscape.py     # Landscape characterization entry point
-│   └── run_grid.sh          # Experiment grid runner
+│   ├── run_grid.sh          # LLM experiment grid (144 runs)
+│   └── run_random_baseline.sh  # Random search baseline (9 runs)
 ├── logs/
 │   ├── landscape/           # Landscape results + init configs
 │   ├── traces/
 │   └── runs/
 └── run_*_bench.py
 ```
-
-## Design Principles
-
-- **Causal Isolation** — Only context visibility is varied.
-- **No Prompt Engineering** — Instruction phrasing is fixed across runs.
-- **No Context Leakage** — Trace-only signals are never shown to the LLM.
-- **Full Observability** — All execution state is recorded for analysis.
 
 ## Quick Start
 
@@ -150,13 +98,17 @@ python run_<benchmark>_bench.py --num-steps 10 --show-task --show-metric
 # Random search baseline (for comparison)
 python run_<benchmark>_bench.py --num-steps 10 --optimizer random --seed 42
 
-# 3. Full experiment grid (48 runs: 3 init qualities × 16 context policies)
+# 3. Full LLM experiment grid (144 runs: 3 init × 16 context × 3 seeds)
 #    Requires landscape characterization (step 1) to have been run first.
-./scripts/run_grid.sh <benchmark> --dry-run    # preview commands
-./scripts/run_grid.sh <benchmark>              # run full grid
+./scripts/run_grid.sh <benchmark> --dry-run    # preview
+./scripts/run_grid.sh <benchmark>              # run
+
+# 4. Random search baseline (9 runs: 3 init × 3 seeds, zero API cost)
+./scripts/run_random_baseline.sh --benchmarks <benchmark> --dry-run
+./scripts/run_random_baseline.sh --benchmarks <benchmark>
 ```
 
-Where `<benchmark>` is one of: `nomad`, `jigsaw`, `forest`, `toy`.
+Where `<benchmark>` is one of: `nomad`, `forest`, `housing`, `jigsaw`, `toy`.
 
 Results saved to `logs/` (landscape in `logs/landscape/`, traces in `logs/traces/`, run summaries in `logs/runs/`).
 
