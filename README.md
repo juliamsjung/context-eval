@@ -110,6 +110,9 @@ context-eval/
 │   │   ├── sampler.py       #   Sobol quasi-random sampling
 │   │   ├── runner.py        #   Batch evaluation
 │   │   └── selector.py      #   Stratified init selection (P25/P50/P75)
+│   ├── optimizers/          # Optimizer strategies (strategy pattern)
+│   │   ├── base.py          # BaseOptimizer ABC
+│   │   └── random.py        # Random search baseline (LLM uses direct path)
 │   ├── trace/               # Trace layer (full observability, never exposed)
 │   │   ├── logger.py
 │   │   ├── run_summary.py
@@ -140,6 +143,9 @@ python scripts/run_landscape.py --benchmark <benchmark> --num-samples 200
 
 # 2. Single benchmark run
 python run_<benchmark>_bench.py --num-steps 10 --show-task --show-metric
+
+# Random search baseline (for comparison)
+python run_<benchmark>_bench.py --num-steps 10 --optimizer random --seed 42
 
 # 3. Full experiment grid (48 runs: 3 init qualities × 16 context policies)
 #    Requires landscape characterization (step 1) to have been run first.
@@ -316,6 +322,12 @@ These flags control what information the LLM agent sees:
 | `--show-metric` | off | Include metric description in LLM prompt |
 | `--show-bounds` | off | Include parameter bounds (valid ranges) in LLM prompt |
 | `--feedback-depth` | 1 | Feedback depth: number of visible outcome signals (1=current only, 5=current+4 history) |
+
+### Optimizer Selection
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--optimizer` | llm | Optimization strategy: `llm` (LLM-based) or `random` (uniform sampling baseline) |
 
 ### Experiment Settings
 

@@ -20,6 +20,10 @@ class RunSummary:
     model_name: str
     temperature: float
 
+    # Optimizer configuration
+    optimizer: str  # "llm", "random"
+    evaluation_budget: int  # num_steps (for sample efficiency plots)
+
     # Axes (experimental conditions)
     axis_signature: str  # e.g., "fd5_t1_m1_b1"
     feedback_depth: int
