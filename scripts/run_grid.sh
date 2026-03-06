@@ -5,12 +5,24 @@
 # Runs benchmark experiments with varying context policies and init qualities.
 # Tests how different context axes affect agent optimization performance.
 #
+# Init qualities (from landscape characterization):
+#   - high.json   → good start    (r <= 0.20, top performers)
+#   - neutral.json → general start (0.45 <= r <= 0.55, middle band)
+#   - low.json    → bad start     (r >= 0.80, bottom performers)
+#
 # Prerequisites:
 #   Run landscape characterization first to generate init configs:
-#     python scripts/run_landscape.py --benchmark <benchmark> --num-samples 200
+#     python scripts/run_landscape.py --benchmark <benchmark> --n-configs 256
 # =============================================================================
 
 set -euo pipefail
+
+# Require jq for JSON extraction
+if ! command -v jq &> /dev/null; then
+    echo "ERROR: jq is required but not installed."
+    echo "Install with: brew install jq (macOS) or apt install jq (Linux)"
+    exit 1
+fi
 
 # Exit on Ctrl+C
 trap 'echo -e "\nInterrupted. Exiting..."; exit 130' INT
@@ -27,7 +39,7 @@ usage() {
     echo "  --dry-run      Print commands without executing"
     echo ""
     echo "Prerequisites:"
-    echo "  python scripts/run_landscape.py --benchmark <benchmark>"
+    echo "  python scripts/run_landscape.py --benchmark <benchmark> --n-configs 256"
     echo ""
     echo "Examples:"
     echo "  $0 nomad                   # Run nomad with 10 steps"
@@ -69,7 +81,7 @@ INIT_CONFIG_DIR="logs/landscape/${BENCHMARK}_init_configs"
 if [[ ! -d "$INIT_CONFIG_DIR" ]]; then
     echo "ERROR: Init configs not found at $INIT_CONFIG_DIR"
     echo "Run landscape characterization first:"
-    echo "  python scripts/run_landscape.py --benchmark $BENCHMARK --num-samples 200"
+    echo "  python scripts/run_landscape.py --benchmark $BENCHMARK --n-configs 256"
     exit 1
 fi
 
@@ -88,8 +100,7 @@ EXPERIMENT_ID="grid_${TIMESTAMP}"
 TOTAL=144  # 3 × 2 × 2 × 2 × 2 × 3 = 144 runs (init_quality × fd × t × m × b × seed)
 FAILED_CONFIGS=()
 
-# Save original config.json for restoration
-CONFIG_PATH="src/benchmarks/${BENCHMARK}/workspace/config.json"
+# Override file path (benchmark reads init_override.json if present, else config.json)
 OVERRIDE_PATH="src/benchmarks/${BENCHMARK}/workspace/init_override.json"
 
 # Cleanup: remove override file on exit so normal runs use config.json
@@ -101,8 +112,9 @@ trap 'echo -e "\nInterrupted. Exiting..."; exit 130' INT
 
 count=0
 for init_quality in low neutral high; do
-    # Write override file (config.json is never touched)
-    cp "$INIT_CONFIG_DIR/$init_quality.json" "$OVERRIDE_PATH"
+    # Extract config field from init JSON and write to override file
+    # (init JSONs contain {config, score, normalized_regret, ...})
+    jq '.config' "$INIT_CONFIG_DIR/$init_quality.json" > "$OVERRIDE_PATH"
     echo "=== Init quality: $init_quality (override written) ==="
 
     for feedback_depth in 1 5; do

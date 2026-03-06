@@ -345,10 +345,10 @@ class TestLandscapeRunner:
 # ---------------------------------------------------------------------------
 
 class TestStratifiedSelector:
-    """Tests for StratifiedSelector."""
+    """Tests for StratifiedSelector with stratum-based selection."""
 
-    def _make_results(self, n: int = 100, higher_is_better: bool = True) -> List[Dict[str, Any]]:
-        """Create mock results with linearly spaced scores."""
+    def _make_results(self, n: int = 256, higher_is_better: bool = True) -> List[Dict[str, Any]]:
+        """Create mock results with linearly spaced scores from 0 to n-1."""
         return [
             {
                 "index": i,
@@ -362,7 +362,7 @@ class TestStratifiedSelector:
 
     def test_returns_three_keys(self):
         selector = StratifiedSelector(higher_is_better=True)
-        results = self._make_results(100)
+        results = self._make_results(256)
         with tempfile.TemporaryDirectory() as tmpdir:
             selections = selector.select(results, output_dir=Path(tmpdir))
         assert set(selections.keys()) == {"low", "neutral", "high"}
@@ -370,35 +370,129 @@ class TestStratifiedSelector:
     def test_ordering_higher_is_better(self):
         """low.score < neutral.score < high.score for higher_is_better."""
         selector = StratifiedSelector(higher_is_better=True)
-        results = self._make_results(200)
+        results = self._make_results(256)
         with tempfile.TemporaryDirectory() as tmpdir:
             sel = selector.select(results, output_dir=Path(tmpdir))
-        assert sel["low"]["primary_score"] < sel["neutral"]["primary_score"]
-        assert sel["neutral"]["primary_score"] < sel["high"]["primary_score"]
+        assert sel["low"]["score"] < sel["neutral"]["score"]
+        assert sel["neutral"]["score"] < sel["high"]["score"]
 
     def test_ordering_lower_is_better(self):
         """low.score > neutral.score > high.score for lower_is_better (reversed)."""
         selector = StratifiedSelector(higher_is_better=False)
-        results = self._make_results(200)
+        results = self._make_results(256)
         with tempfile.TemporaryDirectory() as tmpdir:
             sel = selector.select(results, output_dir=Path(tmpdir))
         # For lower_is_better, "low quality" means high score (bad)
-        assert sel["low"]["primary_score"] > sel["neutral"]["primary_score"]
-        assert sel["neutral"]["primary_score"] > sel["high"]["primary_score"]
+        assert sel["low"]["score"] > sel["neutral"]["score"]
+        assert sel["neutral"]["score"] > sel["high"]["score"]
 
-    def test_high_excludes_top_outliers(self):
-        """High config should not be from the top 5%."""
+    def test_normalized_regret_bounds_higher_is_better(self):
+        """Verify normalized regret values fall within stratum bounds (higher_is_better)."""
         selector = StratifiedSelector(higher_is_better=True)
-        results = self._make_results(200)
+        results = self._make_results(256)
         with tempfile.TemporaryDirectory() as tmpdir:
             sel = selector.select(results, output_dir=Path(tmpdir))
-        # Max score is 199, top 5% starts at ~190
-        assert sel["high"]["primary_score"] < 190
 
-    def test_saves_individual_configs(self):
-        """Should save low.json, neutral.json, high.json files."""
+        # high stratum: r <= 0.20
+        assert sel["high"]["normalized_regret"] <= StratifiedSelector.GOOD_UPPER
+
+        # neutral stratum: 0.45 <= r <= 0.55
+        assert StratifiedSelector.NEUTRAL_LOWER <= sel["neutral"]["normalized_regret"]
+        assert sel["neutral"]["normalized_regret"] <= StratifiedSelector.NEUTRAL_UPPER
+
+        # low stratum: r >= 0.80
+        assert sel["low"]["normalized_regret"] >= StratifiedSelector.BAD_LOWER
+
+    def test_normalized_regret_bounds_lower_is_better(self):
+        """Verify normalized regret values fall within stratum bounds (lower_is_better)."""
+        selector = StratifiedSelector(higher_is_better=False)
+        results = self._make_results(256)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sel = selector.select(results, output_dir=Path(tmpdir))
+
+        # Same bounds apply regardless of metric direction
+        assert sel["high"]["normalized_regret"] <= StratifiedSelector.GOOD_UPPER
+        assert StratifiedSelector.NEUTRAL_LOWER <= sel["neutral"]["normalized_regret"]
+        assert sel["neutral"]["normalized_regret"] <= StratifiedSelector.NEUTRAL_UPPER
+        assert sel["low"]["normalized_regret"] >= StratifiedSelector.BAD_LOWER
+
+    def test_guard_band_exclusion(self):
+        """Configs in guard bands (0.20-0.45, 0.55-0.80) should not be selected."""
         selector = StratifiedSelector(higher_is_better=True)
-        results = self._make_results(50)
+        results = self._make_results(256)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sel = selector.select(results, output_dir=Path(tmpdir))
+
+        for quality, data in sel.items():
+            r = data["normalized_regret"]
+            # Should not be in the guard bands
+            in_lower_guard = StratifiedSelector.GOOD_UPPER < r < StratifiedSelector.NEUTRAL_LOWER
+            in_upper_guard = StratifiedSelector.NEUTRAL_UPPER < r < StratifiedSelector.BAD_LOWER
+            assert not in_lower_guard, f"{quality} config in lower guard band (r={r})"
+            assert not in_upper_guard, f"{quality} config in upper guard band (r={r})"
+
+    def test_normalized_regret_computation_higher_is_better(self):
+        """Verify normalized regret formula for higher_is_better metrics."""
+        selector = StratifiedSelector(higher_is_better=True)
+
+        # score_max=100, score_min=0
+        # For higher_is_better: r = (max - score) / (max - min)
+        assert selector._compute_normalized_regret(100, 0, 100) == 0.0  # Best
+        assert selector._compute_normalized_regret(0, 0, 100) == 1.0    # Worst
+        assert selector._compute_normalized_regret(50, 0, 100) == 0.5   # Middle
+
+    def test_normalized_regret_computation_lower_is_better(self):
+        """Verify normalized regret formula for lower_is_better metrics."""
+        selector = StratifiedSelector(higher_is_better=False)
+
+        # score_max=100, score_min=0
+        # For lower_is_better: r = (score - min) / (max - min)
+        assert selector._compute_normalized_regret(0, 0, 100) == 0.0    # Best
+        assert selector._compute_normalized_regret(100, 0, 100) == 1.0  # Worst
+        assert selector._compute_normalized_regret(50, 0, 100) == 0.5   # Middle
+
+    def test_median_selection_within_stratum(self):
+        """Selected config should be the median of its stratum."""
+        selector = StratifiedSelector(higher_is_better=True)
+        # Use 100 samples with scores 0-99 for predictable stratum sizes
+        results = self._make_results(100)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sel = selector.select(results, output_dir=Path(tmpdir))
+
+        # For 100 samples with linear scores 0-99:
+        # - Good stratum (r <= 0.20): scores >= 80 (20 configs: 80-99)
+        # - Neutral stratum (0.45 <= r <= 0.55): scores 45-55 (11 configs)
+        # - Bad stratum (r >= 0.80): scores <= 20 (21 configs: 0-20)
+
+        # High should be median of good stratum (80-99)
+        assert 80 <= sel["high"]["score"] <= 99
+
+        # Neutral should be median of neutral stratum (45-55)
+        assert 45 <= sel["neutral"]["score"] <= 55
+
+        # Low should be median of bad stratum (0-20)
+        assert 0 <= sel["low"]["score"] <= 20
+
+    def test_output_format_includes_all_fields(self):
+        """Each selection should include config, score, normalized_regret, percentile, stratum."""
+        selector = StratifiedSelector(higher_is_better=True)
+        results = self._make_results(256)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sel = selector.select(results, output_dir=Path(tmpdir))
+
+        for quality in ["low", "neutral", "high"]:
+            data = sel[quality]
+            assert "config" in data, f"Missing 'config' in {quality}"
+            assert "score" in data, f"Missing 'score' in {quality}"
+            assert "normalized_regret" in data, f"Missing 'normalized_regret' in {quality}"
+            assert "percentile" in data, f"Missing 'percentile' in {quality}"
+            assert "stratum" in data, f"Missing 'stratum' in {quality}"
+            assert data["stratum"] == quality
+
+    def test_saves_individual_configs_with_full_data(self):
+        """Should save low.json, neutral.json, high.json files with full selection data."""
+        selector = StratifiedSelector(higher_is_better=True)
+        results = self._make_results(256)
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "configs"
             selector.select(results, output_dir=output_dir)
@@ -406,11 +500,15 @@ class TestStratifiedSelector:
                 cfg_path = output_dir / f"{quality}.json"
                 assert cfg_path.exists(), f"Missing {quality}.json"
                 data = json.loads(cfg_path.read_text())
-                assert "x" in data  # Should be a raw config dict
+                # Should contain full selection data, not just config
+                assert "config" in data
+                assert "score" in data
+                assert "normalized_regret" in data
+                assert "x" in data["config"]  # The actual hyperparameter
 
     def test_saves_metadata(self):
         selector = StratifiedSelector(higher_is_better=True)
-        results = self._make_results(50)
+        results = self._make_results(256)
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "configs"
             selector.select(results, output_dir=output_dir)
@@ -418,7 +516,8 @@ class TestStratifiedSelector:
             assert meta_path.exists()
             meta = json.loads(meta_path.read_text())
             assert "low" in meta
-            assert "primary_score" in meta["low"]
+            assert "score" in meta["low"]
+            assert "normalized_regret" in meta["low"]
 
     def test_too_few_results_raises(self):
         """Need at least 4 successful results."""
@@ -429,13 +528,26 @@ class TestStratifiedSelector:
         with pytest.raises(ValueError, match="at least 4"):
             selector.select(results)
 
+    def test_empty_stratum_raises(self):
+        """Should raise if any stratum is empty due to insufficient variance."""
+        selector = StratifiedSelector(higher_is_better=True)
+        # Create results with very few unique scores - unlikely to fill all strata
+        results = [
+            {"index": i, "config": {"x": float(i)}, "metrics": {},
+             "primary_score": 50.0, "error": None}  # All same score
+            for i in range(10)
+        ]
+        with pytest.raises(ValueError, match="No configs found"):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                selector.select(results, output_dir=Path(tmpdir))
+
     def test_filters_failures(self):
         """Failed evaluation results should be filtered out."""
         selector = StratifiedSelector(higher_is_better=True)
-        results = self._make_results(50)
+        results = self._make_results(256)
         # Add some failures
-        results.append({"index": 99, "config": {}, "metrics": {}, "primary_score": None, "error": "fail"})
+        results.append({"index": 999, "config": {}, "metrics": {}, "primary_score": None, "error": "fail"})
         with tempfile.TemporaryDirectory() as tmpdir:
             sel = selector.select(results, output_dir=Path(tmpdir))
-        # Should still work and only use the 50 valid results
+        # Should still work and only use the 256 valid results
         assert set(sel.keys()) == {"low", "neutral", "high"}

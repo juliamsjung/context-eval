@@ -3,10 +3,10 @@
 
 Generates space-filling samples via Sobol sequences, evaluates each
 against the benchmark's training pipeline, and selects stratified
-init configs (P25/P50/P75) for controlled experiments.
+init configs (good/general/bad strata) for controlled experiments.
 
 Usage:
-    python scripts/run_landscape.py --benchmark nomad [--num-samples 200] [--seed 0]
+    python scripts/run_landscape.py --benchmark nomad [--n-configs 256] [--seed 0]
 """
 from __future__ import annotations
 
@@ -99,8 +99,8 @@ def main() -> None:
         help="Benchmark to characterize.",
     )
     parser.add_argument(
-        "--num-samples", type=int, default=200,
-        help="Number of Sobol samples to evaluate (default: 200).",
+        "--n-configs", type=int, default=256,
+        help="Number of Sobol samples to evaluate (default: 256, power of 2 for exact balance).",
     )
     parser.add_argument(
         "--seed", type=int, default=0,
@@ -112,7 +112,7 @@ def main() -> None:
     entry = BENCHMARK_REGISTRY[args.benchmark]
 
     print(f"=== Landscape Characterization: {args.benchmark} ===")
-    print(f"Samples: {args.num_samples}, Seed: {args.seed}")
+    print(f"Configs: {args.n_configs}, Seed: {args.seed}")
     print()
 
     # Step 1: Generate Sobol samples
@@ -122,7 +122,7 @@ def main() -> None:
         integer_keys=entry["integer_keys"],
         seed=args.seed,
     )
-    configs = sampler.sample(n=args.num_samples)
+    configs = sampler.sample(n=args.n_configs)
     print(f"Generated {len(configs)} Sobol samples.")
 
     # Step 2: Instantiate benchmark and evaluate
@@ -147,8 +147,9 @@ def main() -> None:
     )
 
     print("\n=== Stratified Init Configs ===")
-    for quality, data in selections.items():
-        print(f"  {quality:>8s}: score={data['primary_score']:.4f} (P{data['percentile']:.0f})")
+    for quality in ["high", "neutral", "low"]:
+        data = selections[quality]
+        print(f"  {quality:>8s}: score={data['score']:.4f}, r={data['normalized_regret']:.4f}")
 
     output_dir = Path("logs/landscape") / f"{args.benchmark}_init_configs"
     print(f"\nInit configs saved to: {output_dir}/")

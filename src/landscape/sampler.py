@@ -2,6 +2,8 @@
 
 Generates space-filling configurations across a benchmark's parameter
 space using Sobol sequences, with support for log-scale and integer params.
+
+Default pool size is 256 (power of 2) for exact Sobol sequence balance.
 """
 from __future__ import annotations
 
@@ -50,13 +52,14 @@ class SobolSampler:
                     f"Log-scale requires bounds > 0."
                 )
 
-    def sample(self, n: int = 200) -> List[Dict[str, Any]]:
+    def sample(self, n: int = 256) -> List[Dict[str, Any]]:
         """Generate n quasi-random configurations.
 
         Args:
-            n: Number of samples to generate. Will be rounded up to the
-               next power of 2 internally (Sobol requirement), but only
-               the first n samples are returned.
+            n: Number of samples to generate. Default is 256 (power of 2
+               for exact Sobol balance). Will be rounded up to the next
+               power of 2 internally if not already, but only the first
+               n samples are returned.
 
         Returns:
             List of n config dictionaries with values within bounds.
