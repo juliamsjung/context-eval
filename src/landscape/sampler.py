@@ -68,7 +68,8 @@ class SobolSampler:
         m = max(1, math.ceil(math.log2(n)))
         n_sobol = 2**m
 
-        sampler = Sobol(d=self._dimension, seed=self.seed)
+        # scramble=True is explicit to guard against future scipy default changes
+        sampler = Sobol(d=self._dimension, seed=self.seed, scramble=True)
         # Generate unit hypercube samples in [0, 1]^d
         raw_samples = sampler.random(n_sobol)
 

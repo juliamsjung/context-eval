@@ -551,3 +551,116 @@ class TestStratifiedSelector:
             sel = selector.select(results, output_dir=Path(tmpdir))
         # Should still work and only use the 256 valid results
         assert set(sel.keys()) == {"low", "neutral", "high"}
+
+
+# ---------------------------------------------------------------------------
+# End-to-end pipeline test
+# ---------------------------------------------------------------------------
+
+class TestPipelineIntegration:
+    """End-to-end test for SobolSampler → LandscapeRunner → StratifiedSelector."""
+
+    def test_full_pipeline(self):
+        """Test complete pipeline with a mock benchmark."""
+        # Define a simple parameter space
+        param_bounds = {
+            "x": (0.0, 10.0),
+            "y": (1.0, 100.0),
+        }
+
+        # Step 1: Generate Sobol samples
+        sampler = SobolSampler(
+            param_bounds=param_bounds,
+            log_scale_params=set(),
+            integer_keys=set(),
+            seed=42,
+        )
+        configs = sampler.sample(n=256)
+        assert len(configs) == 256
+
+        # Step 2: Evaluate with a deterministic scoring function
+        # Score = x + y/10, so higher x and y = higher score
+        def mock_train(config):
+            return {"score": config["x"] + config["y"] / 10}
+
+        def mock_extract(metrics):
+            return metrics["score"]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runner = LandscapeRunner(
+                run_training=mock_train,
+                score_extractor=mock_extract,
+                higher_is_better=True,
+                benchmark_name="test_pipeline",
+            )
+            results = runner.evaluate(
+                configs,
+                output_path=Path(tmpdir) / "landscape.json",
+            )
+
+            # Verify all configs evaluated successfully
+            assert len(results) == 256
+            assert all(r["error"] is None for r in results)
+
+            # Step 3: Select stratified configs
+            selector = StratifiedSelector(higher_is_better=True)
+            output_dir = Path(tmpdir) / "init_configs"
+            selections = selector.select(results, output_dir=output_dir)
+
+            # Verify output files exist
+            assert (output_dir / "high.json").exists()
+            assert (output_dir / "neutral.json").exists()
+            assert (output_dir / "low.json").exists()
+            assert (output_dir / "selection_metadata.json").exists()
+
+            # Verify stratum bounds
+            assert selections["high"]["normalized_regret"] <= 0.20
+            assert 0.45 <= selections["neutral"]["normalized_regret"] <= 0.55
+            assert selections["low"]["normalized_regret"] >= 0.80
+
+            # Verify score ordering (higher_is_better)
+            assert selections["low"]["score"] < selections["neutral"]["score"]
+            assert selections["neutral"]["score"] < selections["high"]["score"]
+
+            # Verify output file format
+            high_data = json.loads((output_dir / "high.json").read_text())
+            assert "config" in high_data
+            assert "score" in high_data
+            assert "normalized_regret" in high_data
+            assert "percentile" in high_data
+            assert "stratum" in high_data
+            assert high_data["stratum"] == "high"
+
+    def test_pipeline_reproducibility(self):
+        """Same seed should produce identical selections."""
+        param_bounds = {"x": (0.0, 10.0)}
+
+        def run_pipeline(seed: int):
+            sampler = SobolSampler(param_bounds=param_bounds, seed=seed)
+            configs = sampler.sample(n=256)
+
+            def mock_train(config):
+                return {"score": config["x"]}
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                runner = LandscapeRunner(
+                    run_training=mock_train,
+                    score_extractor=lambda m: m["score"],
+                    higher_is_better=True,
+                    benchmark_name="test",
+                )
+                results = runner.evaluate(configs, output_path=Path(tmpdir) / "out.json")
+                selector = StratifiedSelector(higher_is_better=True)
+                return selector.select(results, output_dir=Path(tmpdir) / "configs")
+
+        # Same seed should produce identical results
+        sel1 = run_pipeline(seed=42)
+        sel2 = run_pipeline(seed=42)
+
+        assert sel1["high"]["config"] == sel2["high"]["config"]
+        assert sel1["neutral"]["config"] == sel2["neutral"]["config"]
+        assert sel1["low"]["config"] == sel2["low"]["config"]
+
+        # Different seed should produce different results
+        sel3 = run_pipeline(seed=0)
+        assert sel1["high"]["config"] != sel3["high"]["config"]

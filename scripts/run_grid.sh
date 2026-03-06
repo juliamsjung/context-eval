@@ -107,8 +107,8 @@ OVERRIDE_PATH="src/benchmarks/${BENCHMARK}/workspace/init_override.json"
 cleanup() {
     rm -f "$OVERRIDE_PATH"
 }
+trap 'cleanup; echo -e "\nInterrupted. Exiting..."; exit 130' INT
 trap cleanup EXIT
-trap 'echo -e "\nInterrupted. Exiting..."; exit 130' INT
 
 count=0
 for init_quality in low neutral high; do

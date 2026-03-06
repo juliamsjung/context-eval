@@ -18,16 +18,25 @@ class StratifiedSelector:
     - general (neutral): 0.45 <= r <= 0.55 (middle 10% of pool) → label "neutral"
     - bad (low): r >= 0.80 (bottom 20% of pool) → label "low"
 
-    Normalized regret is defined as:
-        r(x) = (loss(x) - loss_min) / (loss_max - loss_min)
-
-    For higher-is-better metrics, loss = 1 - metric before computing regret.
+    Normalized regret formulas (lower r = better performance):
+    - Higher-is-better: r = (score_max - score) / (score_max - score_min)
+    - Lower-is-better:  r = (score - score_min) / (score_max - score_min)
 
     Args:
         higher_is_better: Whether higher scores indicate better performance.
     """
 
     # Stratum boundaries (normalized regret thresholds)
+    #
+    # Design rationale:
+    # - Good stratum (r <= 0.20): top ~20% of pool (~51 configs at n=256)
+    # - Neutral stratum (0.45 <= r <= 0.55): middle ~10% of pool (~26 configs)
+    # - Bad stratum (r >= 0.80): bottom ~20% of pool (~51 configs)
+    # - Guard bands (0.20-0.45, 0.55-0.80): ~50% excluded to ensure clean
+    #   separation between strata, preventing overlap in performance levels.
+    #
+    # With 256 Sobol samples, each stratum has sufficient configs for a
+    # stable median selection.
     GOOD_UPPER = 0.20      # r <= 0.20 for good stratum
     NEUTRAL_LOWER = 0.45   # 0.45 <= r <= 0.55 for neutral stratum
     NEUTRAL_UPPER = 0.55
