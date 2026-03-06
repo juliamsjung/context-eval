@@ -47,7 +47,7 @@ To ensure that performance gains are attributed solely to informational visibili
 
 Before running any LLM agent experiments, we map the performance landscape of each benchmark:
 
-1. **Space-filling sampling** — Generate 200 configurations via **Sobol sequences** (quasi-random), providing superior coverage of the hyperparameter space compared to uniform random sampling.
+1. **Space-filling sampling** — Generate 256 configurations via **Sobol sequences** (quasi-random, power of 2 for exact balance), providing superior coverage of the hyperparameter space compared to uniform random sampling.
 2. **Batch evaluation** — Evaluate each configuration against the benchmark's training pipeline (no LLM involved).
 3. **Score distribution** — This establishes the empirical performance distribution, providing a **Random Search baseline** for free.
 
@@ -55,13 +55,15 @@ Parameters spanning multiple orders of magnitude (e.g., `learning_rate`, `C`) ar
 
 ### Phase 2: Performance-Stratified Initialization
 
-From the 200 evaluated samples, we select three representative starting configurations:
+From the 256 evaluated samples, we select three representative starting configurations using **normalized regret** with guard bands:
 
-| Init Quality | Percentile | What It Tests |
+| Init Quality | Stratum (Normalized Regret) | What It Tests |
 |---|---|---|
-| **Low** | P25 (median of bottom quartile) | Can the agent recover from a poor starting point? |
-| **Neutral** | P50 (overall median) | Can the agent improve from an average start? |
-| **High** | P75 (median of top quartile, excl. top 5%) | Can the agent fine-tune near the optimum? |
+| **High** | r ≤ 0.20 (top 20%) | Can the agent fine-tune near the optimum? |
+| **Neutral** | 0.45 ≤ r ≤ 0.55 (middle 10%) | Can the agent improve from an average start? |
+| **Low** | r ≥ 0.80 (bottom 20%) | Can the agent recover from a poor starting point? |
+
+Guard bands (0.20–0.45 and 0.55–0.80) are excluded to ensure clean separation between strata.
 
 These three starting configs replace fixed seed-based initialization, allowing us to isolate the agent's **optimization ability** independently of where it starts.
 
@@ -69,18 +71,19 @@ These three starting configs replace fixed seed-based initialization, allowing u
 ┌─────────────────────────────────────────────────────────────────┐
 │  Phase 1: Landscape Characterization (one-time, no LLM)       │
 │                                                                 │
-│  Sobol Sampling  →  Batch Evaluation  →  Score Distribution    │
-│  (200 configs)      (run_training)       (P25/P50/P75 picks)  │
+│  Sobol Sampling  →  Batch Evaluation  →  Stratum Selection     │
+│  (256 configs)      (run_training)       (high/neutral/low)   │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Phase 2: LLM Agent Experiments (48 runs per benchmark)        │
+│  Phase 2: LLM Agent Experiments (144 runs per benchmark)       │
 │                                                                 │
 │  For each init quality (low, neutral, high):                   │
 │    For each context policy (16 combinations):                  │
-│      Run T=10 optimization steps with LLM agent                │
-│      Log configs, metrics, clamp events, token usage           │
+│      For each seed (0, 1, 2):                                  │
+│        Run T=10 optimization steps with LLM agent              │
+│        Log configs, metrics, clamp events, token usage         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -109,7 +112,7 @@ context-eval/
 │   ├── landscape/           # Landscape characterization (Phase 1)
 │   │   ├── sampler.py       #   Sobol quasi-random sampling
 │   │   ├── runner.py        #   Batch evaluation
-│   │   └── selector.py      #   Stratified init selection (P25/P50/P75)
+│   │   └── selector.py      #   Stratum-based init selection (normalized regret)
 │   ├── optimizers/          # Optimizer strategies (strategy pattern)
 │   │   ├── base.py          # BaseOptimizer ABC
 │   │   └── random.py        # Random search baseline (LLM uses direct path)
@@ -139,7 +142,7 @@ context-eval/
 
 ```bash
 # 1. Landscape characterization (one-time per benchmark, no LLM needed)
-python scripts/run_landscape.py --benchmark <benchmark> --num-samples 200
+python scripts/run_landscape.py --benchmark <benchmark> --n-configs 256
 
 # 2. Single benchmark run
 python run_<benchmark>_bench.py --num-steps 10 --show-task --show-metric
