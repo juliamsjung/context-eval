@@ -2,11 +2,11 @@
 
 ## Overview
 
-ContextEval is a benchmarking framework that studies **how context visibility affects LLM optimizer behavior** in iterative ML workflows.
+ContextEval is a benchmarking framework that studies how context visibility affects LLM optimizer behavior in hyperparameter optimization.
 
-We vary four context axes while holding fixed: base LLM, dataset, optimization horizon, and training environment.
+We vary four context axes (task description, metric definition, parameter bounds, feedback depth) while holding fixed the base LLM, prompt template, decoding configuration, and evaluation environment.
 
-ContextEval is not a prompt-engineering toolkit; it is a controlled experimental framework for studying informational exposure.
+ContextEval is not a prompt-engineering toolkit. It is a controlled experimental framework for isolating the effect of what information an agent can see on how it searches.
 
 ## Research Question
 
